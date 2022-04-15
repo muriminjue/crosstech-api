@@ -67,5 +67,5 @@ module.exports = (sequelize, DataTypes) => {
       modelName: "Retailer",
     }
   );
-  return Customers;
+  return Retailers;
 };

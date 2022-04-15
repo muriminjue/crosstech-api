@@ -1,19 +1,25 @@
+const { Op } = require("sequelize");
+
 const logger = require("../config/logger");
 const db = require("../models");
 
 const addone = async (req, res) => {
   let newcustomer = req.body;
-  // contact and fullname are mandatory fields
+  // fullname are mandatory fields
   try {
     let customer = await db.Customer.findOne({
       where: {
-        contact: req.body.contact,
+        [Op.or]: [
+          { contact: req.body.contact },
+          { email: req.body.email },
+          { fullname: req.body.fullname },
+        ],
       },
     });
     if (customer) {
       res.status(400).json({ msg: "Customer already exist" });
       logger.info(
-        `${system_user}| attempted to add and existing customer record: ${req.body.contact}`
+        `${system_user}| attempted to add and existing customer record: ${req.body.fullname} ${req.body.contact}`
       );
     } else {
       await db.Customer.create(newcustomer);
@@ -21,7 +27,7 @@ const addone = async (req, res) => {
         msg: "customer added succesfuly",
       });
       logger.info(
-        `${system_user}| Added a customer record: ${req.body.contact}`
+        `${system_user}| Added a customer record: ${req.body.fullname} ${req.body.contact}`
       );
     }
   } catch (e) {
@@ -29,7 +35,7 @@ const addone = async (req, res) => {
       msg: "error occurred, try again or contact support",
     });
     logger.error(
-      `${system_user}| Could not add customer  ${req.body.contact} + due to: ${e}`
+      `${system_user}| Could not add customer  ${req.body.fullname} ${req.body.contact} + due to: ${e}`
     );
   }
 };
@@ -39,7 +45,9 @@ const editone = async (req, res) => {
   try {
     if (customer) {
       await db.Customer.update(req.body);
-      logger.info(`${system_user}| Updated customer: ${customer.id}`);
+      logger.info(
+        `${system_user}| Updated customer: ${customer.fullname} ${customer.id}`
+      );
       res.status(200).json({ msg: "customer updated successfully" });
     } else {
       res.satus(404).json({ msg: "Customer does not exist" });
@@ -97,7 +105,7 @@ const deleteone = async (req, res) => {
   try {
     if (customer) {
       await db.Customer.destroy();
-      logger.infor(
+      logger.info(
         `${system_user}| deleted customer: ${customer.fullname} ${customer.contact}`
       );
       res.status(200).json({ msg: "customer deleted successfully" });

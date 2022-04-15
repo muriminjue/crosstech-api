@@ -1,19 +1,25 @@
+const { Op } = require("sequelize");
+
 const logger = require("../config/logger");
 const db = require("../models");
 
 const addone = async (req, res) => {
   let newsupplier = req.body;
-  // contact and fullname are mandatory fields
+  // fullname are mandatory fields
   try {
     let supplier = await db.Supplier.findOne({
       where: {
-        contact: req.body.contact,
+        [Op.or]: [
+          { contact: req.body.contact },
+          { email: req.body.email },
+          { fullname: req.body.fullname },
+        ],
       },
     });
     if (supplier) {
       res.status(400).json({ msg: "supplier already exist" });
       logger.info(
-        `${system_user}| attempted to add and existing supplier record: ${req.body.contact}`
+        `${system_user}| attempted to add and existing supplier record: ${req.body.fullname} ${req.body.contact}`
       );
     } else {
       await db.Supplier.create(newsupplier);
@@ -21,7 +27,7 @@ const addone = async (req, res) => {
         msg: "supplier added succesfuly",
       });
       logger.info(
-        `${system_user}| Added a supplier record: ${req.body.contact}`
+        `${system_user}| Added a supplier record: ${req.body.fullname} ${req.body.contact}`
       );
     }
   } catch (e) {
@@ -29,7 +35,7 @@ const addone = async (req, res) => {
       msg: "error occurred, try again or contact support",
     });
     logger.error(
-      `${system_user}| Could not add supplier  ${req.body.contact} + due to: ${e}`
+      `${system_user}| Could not add supplier ${req.body.fullname}  ${req.body.contact} + due to: ${e}`
     );
   }
 };
@@ -39,7 +45,9 @@ const editone = async (req, res) => {
   try {
     if (supplier) {
       await db.Supplier.update(req.body);
-      logger.info(`${system_user}| Updated supplier: ${supplier.id}`);
+      logger.info(
+        `${system_user}| Updated supplier: ${supplier.id} ${supplier.fullname}`
+      );
       res.status(200).json({ msg: "Supplier updated successfully" });
     } else {
       res.satus(404).json({ msg: "supplier does not exist" });
@@ -97,7 +105,7 @@ const deleteone = async (req, res) => {
   try {
     if (supplier) {
       await db.Supplier.destroy();
-      logger.infor(
+      logger.info(
         `${system_user} | deleted supplier: ${supplier.fullname}  ${supplier.contact}`
       );
       res.status(200).json({ msg: "Supplier deleted successfully" });
@@ -121,7 +129,7 @@ const getone = async (req, res) => {
     if (supplier) {
       res.status(200).send(supplier);
       logger.info(
-        `${system_user}| Requested all supplier <${supplier.id}> ${supplier.name}`
+        `${system_user}| Requested all supplier <${supplier.id}> ${supplier.fullname}`
       );
     } else {
       res.satus(404).json({ msg: "supplier does not exist" });

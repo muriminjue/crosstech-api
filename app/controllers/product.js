@@ -31,15 +31,23 @@ const getall = async (res) => {
 
 const addnew = async (req, res) => {
   try {
-    let product = await db.Product.create({
-      name: req.body.name,
-      description: req.body.description,
-      measure: req.body.measure,
+    let myproduct = await db.Product.findOne({
+      where: { name: req.body.name },
     });
-    res.status(200).json({ msg: "success" });
-    logger.info(
-      `${system_user}| added a new product: ${product.dataValues.name}<${product.dataValues.id}>`
-    );
+    if (!myproduct) {
+      let product = await db.Product.create({
+        name: req.body.name,
+        description: req.body.description,
+        measure: req.body.measure,
+      });
+      res.status(200).json({ msg: "success" });
+      logger.info(
+        `${system_user}| added a new product: ${product.dataValues.name}<${product.dataValues.id}>`
+      );
+    } else {
+      res.status(400).json({ msg: "Product exists" });
+      logger.info(`${system_user}| tried adding existing product`);
+    }
   } catch (e) {
     logger.error(
       `${system_user}| encountered error when adding new product due to: ${e}`
@@ -110,7 +118,13 @@ const getonedetailed = async (req, res) => {
   try {
     let product = await db.Product.findByPk(id, {
       order: [["createdAt", "DESC"]],
-      include: { model: db.Package, model: db.Stocking, model: db.Sale },
+      include: {
+        model: db.Package,
+        model: db.Stocking,
+        model: db.Sale,
+        model: db.Packaging,
+        model: db.Expense,
+      },
     });
     if (product) {
       res.status(200).send(product);
@@ -135,7 +149,12 @@ const getalldetailed = async (res) => {
   try {
     const product = await db.Product.findAll({
       order: [["createdAt", "DESC"]],
-      include: { model: db.Package, model: db.Stocking, model: db.Sale },
+      include: {
+        model: db.Package,
+        model: db.Stocking,
+        model: db.Sale,
+        model: db.Expense,
+      },
     });
     if (product.length != 0) {
       res.status(200).send(product);

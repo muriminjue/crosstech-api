@@ -1,16 +1,22 @@
 "use strict";
 const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
-  class Otherstockings extends Model {
+  class Expenses extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
      * The `models/index` file will call this method automatically.
      */
-    static associate({ Supplier, Otherstock, User, Expense }) {
+    static associate({ Stocking, Otherstocking, Product, Otherstock, User }) {
       // define association here
-      this.belongsTo(Supplier, {
-        foreignKey: "supplierId",
+      this.belongsTo(Stocking, {
+        foreignKey: "stockingId",
+      });
+      this.belongsTo(Otherstocking, {
+        foreignKey: "otherstockingId",
+      });
+      this.belongsTo(Product, {
+        foreignKey: "productId",
       });
       this.belongsTo(Otherstock, {
         foreignKey: "otherstockId",
@@ -18,12 +24,12 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(User, {
         foreignKey: "userId",
       });
-      this.hasMany(Expense, {
-        foreignKey: "otherstockingId",
+      this.hasMany(User, {
+        foreignKey: "userId",
       });
     }
   }
-  Otherstockings.init(
+  Expenses.init(
     {
       id: {
         type: DataTypes.UUID,
@@ -31,32 +37,33 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
         allowNull: false,
       },
-      invoiceNo: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      number: {
+      date: {
+        type: DataTypes.DATE,
+        defaultValue: Date.now(),
         allowNull: false,
-        type: DataTypes.INTEGER,
       },
-      description: {
+      amount: {
+        type: DataTypes.FLOAT,
+        allowNull: false,
+      },
+      receiptNo: {
         type: DataTypes.STRING,
-        allowNull: true,
+        allowNull: false,
       },
       receipt: {
         type: DataTypes.STRING,
-        allowNull: true,
+        allowNull: false,
       },
-      cost: {
-        type: DataTypes.FLOAT,
-        allowNull: true,
+      paidto: {
+        type: DataTypes.STRING,
+        allowNull: false,
       },
     },
     {
       sequelize,
-      tableName: "otherstockings",
-      modelName: "Otherstocking",
+      tableName: "expenses",
+      modelName: "Expense",
     }
   );
-  return Otherstockings;
+  return Expenses;
 };

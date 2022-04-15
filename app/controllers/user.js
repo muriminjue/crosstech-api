@@ -12,15 +12,28 @@ const axios = require("axios");
 
 const salt = 12;
 dotenv.config();
+const allroles = [
+  "admin",
+  "systemaadmin",
+  "product_man",
+  "stock_man",
+  "sales_man",
+  "accounts_man",
+];
+
+const getroles = async (req, res) => {
+  res.status(200).send(allroles);
+  logger.info(` ${system_user}| requested all user roles`);
+};
 
 const adduser = async (req, res) => {
   let username = req.body.username,
     staff = await db.Staff.findOne({ where: { email: username } }),
-    roles = req.body.roles.split(","),
-    password = generator.generate({
-      length: 10,
-      uppercase: false,
-    });
+    roles = req.body.roles;
+  password = generator.generate({
+    length: 10,
+    uppercase: false,
+  });
   if (!staff) {
     try {
       if (!username) {
@@ -210,7 +223,7 @@ const sendotp = async (req, res) => {
   }
 };
 
-const updatepass = async (req, res) => {
+const changepass = async (req, res) => {
   //must be the user
   let user = await db.Otp.findOne({ where: { otp: req.body.otp } }),
     username = req.params.username;
@@ -223,21 +236,55 @@ const updatepass = async (req, res) => {
         { where: { username: username } }
       );
       await db.Otp.destroy({ where: { otp: req.body.otp } });
-      logger.info(`${system_user}| changed password for : ${username}`);
+      logger.info(`changed password for : ${username}`);
       res.status(200).json({ msg: `${username}changed password` });
     } catch (e) {
       res.status(500).json({
         msg: "Error occurred, try again or contact support",
       });
       logger.error(
-        `${system_user}| Could not update password for user: ${username} due to:  ${e}`
+        ` Could not update password for user: ${username} due to:  ${e}`
       );
     }
   } else {
     res.status(404).json({
       msg: "Otp or username is invalid/ expired",
     });
-    logger.info(`${system_user}| used an otp or is not linked to otp`);
+    logger.info(` used an otp or is not linked to otp`);
+  }
+};
+
+const updatepass = async (req, res) => {
+  try {
+    let user = await db.User.findOne({
+      where: { username: req.params.username },
+      include: { model: db.Staff, model: db.Userroles },
+    });
+    if (user && user.username == system_user) {
+      let isMatch = await bcrypt.compare(req.body.oldpassword, user.password);
+      if (!isMatch) {
+        res.status(403).json({ msg: "your password is incorrect" });
+        logger.warn("tried changing password with wrong old password");
+      } else {
+        let password = bcrypt.hashSync(req.body.newpassword, parseInt(salt));
+        await db.User.update(
+          { password: password },
+          { where: { email: req.params.username } }
+        );
+        res.status(200).json({ msg: "Password has been Updated" });
+        logger.info(`${system_user}|Updated password`);
+      }
+    } else {
+      res.status(403).json({ msg: "Not your account" });
+      logger.warn(
+        `${system_user}| tried changing password for other account ${req.params.username} `
+      );
+    }
+  } catch (e) {
+    res.status(500).json({ msg: "Error, try again" });
+    logger.error(
+      `${system_user}| Could not change their password due to: ${e}`
+    );
   }
 };
 
@@ -300,6 +347,8 @@ module.exports = {
   login,
   checkauth,
   sendotp,
+  changepass,
   updatepass,
   deleteuser,
+  getroles,
 };

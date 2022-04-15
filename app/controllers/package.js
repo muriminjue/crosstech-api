@@ -23,15 +23,23 @@ const getall = async (req, res) => {
 
 const addnew = async (req, res) => {
   try {
-    let package = await db.Package.create({
-      productId: req.body.product,
-      quantity: parseInt(req.body.quantity),
-      price: parseInt(req.body.price),
+    let mypackage = await db.Package.findOne({
+      where: { quantity: req.body.quantity },
     });
-    res.status(200).json({ msg: "success" });
-    logger.info(
-      `${system_user}| added a new package: ${package.dataValues.name}<${package.dataValues.id}>`
-    );
+    if (!mypackage) {
+      let package = await db.Package.create({
+        productId: req.body.product,
+        quantity: parseInt(req.body.quantity),
+        price: parseInt(req.body.price),
+      });
+      res.status(200).json({ msg: "success" });
+      logger.info(
+        `${system_user}| added a new package: ${package.dataValues.name}<${package.dataValues.id}>`
+      );
+    } else {
+      res.status(400).json({ msg: "Package exists" });
+      logger.info(`${system_user}| tried adding existing package`);
+    }
   } catch (e) {
     res.status(500).json({
       msg: "Error occurred, try again or contact support",
@@ -49,6 +57,9 @@ const getone = async (req, res) => {
       order: [["createdAt", "DESC"]],
       include: {
         model: db.Product,
+        through: {
+          attributes: [],
+        },
       },
     });
     if (package) {

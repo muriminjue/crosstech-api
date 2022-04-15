@@ -1,3 +1,5 @@
+const { Op } = require("sequelize");
+
 const logger = require("../config/logger");
 const db = require("../models");
 
@@ -7,7 +9,11 @@ const addone = async (req, res) => {
   try {
     let retailer = await db.Retailer.findOne({
       where: {
-        contact: req.body.contact,
+        [Op.or]: [
+          { contact: req.body.contact },
+          { email: req.body.email },
+          { fullname: req.body.fullname },
+        ],
       },
     });
     if (retailer) {

@@ -1,29 +1,23 @@
 "use strict";
 const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
-  class Otherstockings extends Model {
+  class Adjustments extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
      * The `models/index` file will call this method automatically.
      */
-    static associate({ Supplier, Otherstock, User, Expense }) {
+    static associate({ Expense, Purchase }) {
       // define association here
-      this.belongsTo(Supplier, {
-        foreignKey: "supplierId",
+      this.belongsTo(Expense, {
+        foreignKey: "expenseId",
       });
-      this.belongsTo(Otherstock, {
-        foreignKey: "otherstockId",
-      });
-      this.belongsTo(User, {
-        foreignKey: "userId",
-      });
-      this.hasMany(Expense, {
-        foreignKey: "otherstockingId",
+      this.belongsTo(Purchase, {
+        foreignKey: "purchaseId",
       });
     }
   }
-  Otherstockings.init(
+  Adjustments.init(
     {
       id: {
         type: DataTypes.UUID,
@@ -31,32 +25,36 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
         allowNull: false,
       },
-      invoiceNo: {
+      fullname: {
         type: DataTypes.STRING,
-        allowNull: true,
-      },
-      number: {
         allowNull: false,
-        type: DataTypes.INTEGER,
       },
-      description: {
+      email: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      receipt: {
+      contact: {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      cost: {
-        type: DataTypes.FLOAT,
+      location: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      company: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      pinNo: {
+        type: DataTypes.STRING,
         allowNull: true,
       },
     },
     {
       sequelize,
-      tableName: "otherstockings",
-      modelName: "Otherstocking",
+      tableName: "adjustments",
+      modelName: "Adjustment",
     }
   );
-  return Otherstockings;
+  return Adjustments;
 };

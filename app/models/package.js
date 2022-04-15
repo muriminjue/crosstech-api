@@ -37,10 +37,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       quantity: {
+        // denomination amount
         allowNull: false,
         type: DataTypes.INTEGER,
       },
       number: {
+        // items count
         allowNull: true,
         defaultValue: 0,
         type: DataTypes.INTEGER,

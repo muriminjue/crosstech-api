@@ -5,8 +5,9 @@ const fileupload = require("../services/fileupload");
 // stock product
 const purchaseprod = async (req, res) => {
   let productid = req.body.product,
-    product = await db.Product.findByPk(productid);
-  if (product) {
+    product = await db.Product.findByPk(productid),
+    supplier = db.Supplier.findByPk(req.body.supplierId);
+  if (product && supplier) {
     let amount = parseInt(req.body.quantity) + product.amount,
       total = parseInt(req.body.quantity) + product.total,
       newStocking = {
@@ -41,10 +42,18 @@ const purchaseprod = async (req, res) => {
             },
           }
         );
+        await db.Expense.create({
+          amount: req.body.cost,
+          reciept: file.name,
+          receipNo: req.body.recieptNo,
+          paidto: supplier.fullname,
+          stockingId: stocking.dataValues.id,
+          productId: productid,
+        });
       }
       res.status(200).json({ msg: "Stock Updated" });
       logger.info(
-        `${system_user}| updated stock for <${product.id}> ${product.name}`
+        `${system_user}| Purchased stock for <${product.id}> ${product.name}`
       );
     } catch (e) {
       res
@@ -53,7 +62,9 @@ const purchaseprod = async (req, res) => {
       logger.error(`${system_user}| Could not add new stock due to: ${e}`);
     }
   } else {
-    res.status(404).json({ msg: "Product you selected does not exist" });
+    res
+      .status(404)
+      .json({ msg: "Product or supplier you selected does not exist" });
     logger.info(`${system_user}| tried adding stock to missing product`);
   }
 };
@@ -98,29 +109,49 @@ const updatestocking = async (req, res) => {
 };
 
 const uploadStockreceipt = async (req, res) => {
-  let stocking = await db.Stocking.findByPk(req.params.id),
-    product = await db.Product.findByPk(stocking.productId);
-  if (req.files) {
-    if (stocking) {
-      let file = req.files;
-      await fileupload(file);
-      await db.Stocking.update(
-        { receipt: file.name },
-        { where: { id: req.params.id } }
-      );
-      res.status(200).json({ msg: "Stock updated succesfully" });
-      logger.info(
-        `${system_user}| updated stock ${stocking.id} for <${product.id}> ${product.name}`
-      );
+  try {
+    let stocking = await db.Stocking.findByPk(req.params.id),
+      product = await db.Product.findByPk(stocking.productId),
+      supplier = await db.Supplier.findByPk(stocking.supplierId);
+    if (req.files) {
+      if (stocking) {
+        let file = req.files.receipt;
+        await fileupload(file);
+        await db.Stocking.update(
+          { receipt: file.name },
+          { where: { id: req.params.id } }
+        );
+        await db.Expense.create({
+          date: stocking.createdAt,
+          amount: stocking.cost,
+          receipt: file.name,
+          receiptNo: req.body.recieptNo,
+          paidto: supplier.fullname,
+          stockingId: stocking.id,
+          productId: product.id,
+          userId: system_userid,
+        });
+        res.status(200).json({ msg: "Stock updated succesfully" });
+        logger.info(
+          `${system_user}| updated stock ${stocking.id} for <${product.id}> ${product.name}`
+        );
+      } else {
+        res.status(404).json({ msg: "Record does not exist" });
+        logger.info(`${system_user}| tried adding receipt to missing stock`);
+      }
     } else {
-      res.status(404).json({ msg: "Record does not exist" });
-      logger.info(`${system_user}| tried adding receipt to missing stock`);
+      res.status(400).json({ msg: "No attached file" });
+      logger.info(`${system_user}| uploaded empty reciept field`);
     }
-  } else {
-    res.status(400).json({ msg: "No attached file" });
-    logger.info(`${system_user}| uploaded empty reciept field`);
+  } catch (e) {
+    res
+      .status(500)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(`${system_user}| Could not upload stock receipt due to: ${e}`);
   }
 };
+
+//do not create endpoint yet
 const deletestocking = async (req, res) => {
   let stocking = await db.Stocking.findByPk(req.params.id),
     product = await db.Product.findByPk(stocking.productId);
@@ -128,7 +159,10 @@ const deletestocking = async (req, res) => {
     try {
       let amount = product.amount - stocking.quantity,
         total = product.total - stocking.quantity;
-      await db.Stocking.destroy({ where: { id: req.params.id } });
+      await db.Stocking.update(
+        { adjusted: true },
+        { where: { id: req.params.id } }
+      );
       await db.Product.update(
         { amount: amount, total: total },
         { where: { id: stocking.productId } }
@@ -147,32 +181,37 @@ const deletestocking = async (req, res) => {
   }
 };
 
-// const getallstocking = async (req, res) => {
-//   try {
-//     let stockings = await db.stocking.findAll({
-//       order: [["createdAt", "DESC"]],
-//     });
-//     if (stockings.length != 0) {
-//       res.status(200).send(stockings);
-//       logger.info(`${system_user}| fetched all stocking`);
-//     } else {
-//       res.status(404).json({ msg: "Records do not exist" });
-//       logger.info(
-//         `${system_user}| attempted to fetch stocking record and found none`
-//       );
-//     }
-//   } catch (e) {
-//     res
-//       .status(504)
-//       .json({ msg: "Error occurred, try again or contact support" });
-//     logger.error(`${system_user}| Could not fetch all stocking due to: ${e}`);
-//   }
-// };
+const getallstocking = async (req, res) => {
+  try {
+    let stockings = await db.Stocking.findAll({
+      order: [["createdAt", "DESC"]],
+    });
+    if (stockings.length != 0) {
+      res.status(200).send(stockings);
+      logger.info(`${system_user}| fetched all stocking`);
+    } else {
+      res.status(404).json({ msg: "Records do not exist" });
+      logger.info(
+        `${system_user}| attempted to fetch stocking record and found none`
+      );
+    }
+  } catch (e) {
+    res
+      .status(504)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(`${system_user}| Could not fetch all stocking due to: ${e}`);
+  }
+};
 
 const getonestocking = async (req, res) => {
   try {
     let stocking = await db.Stocking.findByPk(req.params.id, {
-      include: { model: db.Supplier, model: db.Product, model: db.User },
+      include: {
+        model: db.Supplier,
+        model: db.Product,
+        model: db.User,
+        model: db.Expense,
+      },
     });
     if (stocking) {
       res.status(200).send(stocking);
@@ -195,7 +234,12 @@ const getallstockingdetailed = async (req, res) => {
   try {
     let stockings = await db.Stocking.findAll({
       order: [["createdAt", "DESC"]],
-      include: { model: db.Supplier, model: db.Product, model: db.User },
+      include: {
+        model: db.Supplier,
+        model: db.Product,
+        model: db.User,
+        model: db.Expense,
+      },
     });
     if (stockings.length != 0) {
       res.status(200).send(stockings);
@@ -348,7 +392,7 @@ const getallpackaging = async (req, res) => {
 };
 
 // other stock
-const addothertockitem = async (req, res) => {
+const addotherstockitem = async (req, res) => {
   try {
     let package = await db.Package.findByPk(req.body.package),
       total = parseInt(req.body.number) + package.total,
@@ -374,7 +418,8 @@ const addothertockitem = async (req, res) => {
 
 const purchaseotherstock = async (req, res) => {
   let otherstockid = req.body.otherstock,
-    otherstock = await db.Otherstock.findByPk(otherstockid);
+    otherstock = await db.Otherstock.findByPk(otherstockid),
+    supplier = db.Supplier.findByPk(req.body.supplierId);
   if (otherstock) {
     let newStocking = {
       number: req.body.number,
@@ -409,6 +454,14 @@ const purchaseotherstock = async (req, res) => {
             },
           }
         );
+        await db.Expense.create({
+          amount: req.body.cost,
+          reciept: file.name,
+          receiptNo: req.body.recieptNo,
+          paidto: supplier.fullname,
+          stockingId: otherstocking.dataValues.id,
+          otherstockId: otherstockid,
+        });
       }
       res.status(200).json({ msg: "Stock item updated" });
       logger.info(
@@ -467,30 +520,53 @@ const updateotherstocking = async (req, res) => {
 };
 
 const uploadOtherstockreceipt = async (req, res) => {
-  let otherstocking = await db.Otherstocking.findByPk(req.params.id),
-    otherstock = await db.Otherstock.findByPk(otherstock.packageId);
-  if (req.files) {
-    if (otherstocking) {
-      let file = req.files;
-      await fileupload(file);
-      await db.Otherstocking.update(
-        { receipt: file.name },
-        { where: { id: req.params.id } }
-      );
-      res.status(200).json({ msg: "Item stocking updated succesfully" });
-      logger.info(
-        `${system_user}| updated stock ${otherstocking.id} for <${otherstock.id}> ${otherstock.name}`
-      );
+  try {
+    let otherstocking = await db.Otherstocking.findByPk(req.params.id),
+      otherstock = await db.Otherstock.findByPk(otherstock.packageId),
+      supplier = await db.Supplier.findByPk(stocking.supplierId);
+    if (req.files) {
+      if (otherstocking) {
+        let file = req.files;
+        await fileupload(file);
+        await db.Otherstocking.update(
+          { receipt: file.name },
+          { where: { id: req.params.id } }
+        );
+        await db.Expense.create({
+          date: otherstocking.createdAt,
+          amount: otherstocking.cost,
+          receipt: file.name,
+          receiptNo: req.body.recieptNo,
+          paidto: supplier.fullname,
+          stockingId: otherstocking.id,
+          otherstockId: otherstock.id,
+          userId: system_userid,
+        });
+        res.status(200).json({ msg: "Item stocking updated succesfully" });
+        logger.info(
+          `${system_user}| updated stock ${otherstocking.id} for <${otherstock.id}> ${otherstock.name}`
+        );
+      } else {
+        res.status(404).json({ msg: "Record does not exist" });
+        logger.info(
+          `${system_user}| tried adding receipt to missing item stock`
+        );
+      }
     } else {
-      res.status(404).json({ msg: "Record does not exist" });
-      logger.info(`${system_user}| tried adding receipt to missing item stock`);
+      res.status(400).json({ msg: "No attached file" });
+      logger.info(`${system_user}| uploaded empty reciept field`);
     }
-  } else {
-    res.status(400).json({ msg: "No attached file" });
-    logger.info(`${system_user}| uploaded empty reciept field`);
+  } catch (e) {
+    res
+      .status(500)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(
+      `${system_user}| Could not upload otherstock receipt due to: ${e}`
+    );
   }
 };
 
+// do not create endpoint
 const deleteotherstocking = async (req, res) => {
   let otherstocking = await db.Otherstocking.findByPk(req.params.id),
     otherstock = await db.otherstocking.findByPk(otherstocking.otherstockId);
@@ -524,7 +600,12 @@ const deleteotherstocking = async (req, res) => {
 const getoneotherstocking = async (req, res) => {
   try {
     let otherstocking = await db.Otherstocking.findByPk(req.params.id, {
-      include: { model: db.Supplier, model: db.Otherstock, model: db.User },
+      include: {
+        model: db.Supplier,
+        model: db.Otherstock,
+        model: db.User,
+        model: db.Expense,
+      },
     });
     if (otherstocking) {
       res.status(200).send(otherstocking);
@@ -549,7 +630,12 @@ const getallotherstockingdetailed = async (req, res) => {
   try {
     let otherstockings = await db.Otherstocking.findAll({
       order: [["createdAt", "DESC"]],
-      include: { model: db.Supplier, model: db.Otherstock, model: db.User },
+      include: {
+        model: db.Supplier,
+        model: db.Otherstock,
+        model: db.User,
+        model: db.Expense,
+      },
     });
     if (otherstockings.length != 0) {
       res.status(200).send(otherstockings);
@@ -679,11 +765,12 @@ module.exports = {
   deletestocking,
   getallstockingdetailed,
   getonestocking,
+  getallstocking,
   packageproduct,
   deletepackaging,
   getallpackaging,
   getonepackaging,
-  addothertockitem,
+  addotherstockitem,
   purchaseotherstock,
   updateotherstocking,
   uploadOtherstockreceipt,

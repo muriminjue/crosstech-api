@@ -38,9 +38,9 @@ app.use(
 app.use("/api", router);
 
 //seqeulize sync
-// db.sequelize.sync({
-//   force: true,
-// });
+db.sequelize.sync({
+  force: true,
+});
 
 //run app
 
@@ -49,13 +49,13 @@ app.use("/api", router);
   logger.info("db connected");
 })()
   .then(async () => {
+    app.listen(Port, async () => {
+      logger.info(`App running at port: ${Port}`);
+    });
+  })
+  .then(async () => {
     await routineTasks();
   })
   .catch((error) => {
     logger.error(error);
-  })
-  .finally(async () => {
-    app.listen(Port, async () => {
-      logger.info(`App running at port: ${Port}`);
-    });
   });

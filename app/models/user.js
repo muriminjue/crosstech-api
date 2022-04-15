@@ -26,6 +26,7 @@ module.exports = (sequelize, DataTypes) => {
       Otherstocking,
       Releasedstock,
       Userroles,
+      Expense,
     }) {
       // define association here
       this.belongsTo(Staff, {
@@ -56,6 +57,9 @@ module.exports = (sequelize, DataTypes) => {
         targetKey: "username",
         onDelete: "cascade",
         onUpdate: "cascade",
+      });
+      this.hasMany(Expense, {
+        foreignKey: "userId",
       });
     }
   }
