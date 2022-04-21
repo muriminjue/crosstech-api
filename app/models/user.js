@@ -54,9 +54,10 @@ module.exports = (sequelize, DataTypes) => {
       });
       this.hasMany(Userroles, {
         foreignKey: "username",
-        targetKey: "username",
+        sourceKey: "username",
         onDelete: "cascade",
         onUpdate: "cascade",
+        constraints: false,
       });
       this.hasMany(Expense, {
         foreignKey: "userId",

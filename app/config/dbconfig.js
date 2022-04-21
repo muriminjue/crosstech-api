@@ -20,7 +20,7 @@ const config = {
     username: process.env.DBuser2,
     password: process.env.DBpass2,
     database: process.env.DBname2,
-    host: "127.0.0.1",
+    host:process.env.DBhost2,
     dialect: "mysql",
     logging: (msg) => logger.info(msg),
   },

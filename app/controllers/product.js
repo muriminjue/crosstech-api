@@ -1,15 +1,15 @@
 const logger = require("../config/logger");
 const db = require("../models");
 
-const getall = async (res) => {
+const getall = async (req, res) => {
   try {
     const product = await db.Product.findAll({
       order: [["createdAt", "DESC"]],
       include: {
         model: db.Package,
-        through: {
-          attributes: [],
-        },
+        // model: db.Expense,
+        // model: db.Stocking,
+        // model: db.Sale,
       },
     });
     if (product.length != 0) {
@@ -24,7 +24,7 @@ const getall = async (res) => {
       msg: "Error occurred, try again or contact support",
     });
     logger.error(
-      `${system_user}| encountered error when getting all prdoucts due to: ${e}`
+      `${system_user}| encountered error when getting all products due to: ${e}`
     );
   }
 };
@@ -87,12 +87,9 @@ const getone = async (req, res) => {
   try {
     let product = await db.Product.findByPk(id, {
       order: [["createdAt", "DESC"]],
-      include: {
-        model: db.Package,
-        through: {
-          attributes: [],
-        },
-      },
+      include: [
+        { model: db.Package },
+      ],
     });
     if (product) {
       res.status(200).send(product);
@@ -118,13 +115,13 @@ const getonedetailed = async (req, res) => {
   try {
     let product = await db.Product.findByPk(id, {
       order: [["createdAt", "DESC"]],
-      include: {
-        model: db.Package,
-        model: db.Stocking,
-        model: db.Sale,
-        model: db.Packaging,
-        model: db.Expense,
-      },
+      include: [
+        { model: db.Package },
+        { model: db.Stocking },
+        { model: db.Sale },
+        { model: db.Packaging },
+        { model: db.Expense },
+      ],
     });
     if (product) {
       res.status(200).send(product);
@@ -145,16 +142,17 @@ const getonedetailed = async (req, res) => {
   }
 };
 
-const getalldetailed = async (res) => {
+const getalldetailed = async (req,res) => {
   try {
     const product = await db.Product.findAll({
       order: [["createdAt", "DESC"]],
-      include: {
-        model: db.Package,
-        model: db.Stocking,
-        model: db.Sale,
-        model: db.Expense,
-      },
+      include: [
+        { model: db.Package },
+        { model: db.Stocking },
+        { model: db.Sale },
+        { model: db.Packaging },
+        { model: db.Expense },
+      ],
     });
     if (product.length != 0) {
       res.status(200).send(product);

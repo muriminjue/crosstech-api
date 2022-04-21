@@ -24,12 +24,17 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
 
+      private: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+      },
       phone: {
         type: DataTypes.STRING,
         allowNull: true,
       },
       message: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.TEXT,
         allowNull: false,
       },
       sent: {

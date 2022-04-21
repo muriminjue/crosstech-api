@@ -22,7 +22,7 @@ const addone = async (req, res) => {
         email: req.body.email,
       },
     });
-    if (staff) {
+    if (!staff) {
       await db.Staff.create(newStaff);
       res.status(200).json({
         msg: "staff added succesfuly",
@@ -35,6 +35,7 @@ const addone = async (req, res) => {
       logger.info(
         `${system_user}| attempted to add an existing staff record:  ${req.body.email}`
       );
+      return;
     }
   } catch (error) {
     res.status(500).json({
@@ -105,52 +106,46 @@ const editone = async (req, res) => {
       email: req.params.email,
     },
   });
+
   if (staff) {
-    if (req.files != null || req.body.length > 0) {
-      if (req.files != null) {
-        let file = req.files.image;
-        if (imageMimeTypes.includes(file.mimetype)) {
-          await fileupload(file);
-          await db.Staff.update(
-            { image: file.name },
-            {
-              where: {
-                email: req.params.email,
-              },
-            }
-          );
-        } else {
-          res.status(400).json({ msg: "Wrong file format" });
-          logger.info(
-            `${system_user}| Attempted to upload wrong user image format`
-          );
-        }
-      }
-      //then handle other data
-      let formdata = req.body;
-      try {
-        await db.Staff.update(formdata, {
-          where: {
-            email: req.params.email,
-          },
-        });
-        res.status(200).json({ msg: "update successful" });
+    if (req.files != null) {
+      let file = req.files.image;
+      if (imageMimeTypes.includes(file.mimetype)) {
+        await fileupload(file);
+        await db.Staff.update(
+          { image: file.name },
+          {
+            where: {
+              email: req.params.email,
+            },
+          }
+        );
+      } else {
+        res.status(400).json({ msg: "Wrong file format" });
         logger.info(
-          `${system_user}| updated staff details for: ${req.params.email}`
+          `${system_user}| Attempted to upload wrong user image format`
         );
-      } catch (error) {
-        logger.error(
-          `${system_user}| Updating staff record encountered error: ${error}`
-        );
-        res.status(500).json({
-          msg: "encountered an error updating staff, try again or contact support",
-        });
       }
-    } else {
-      res.status(400).json({ msg: "no data posted" });
+    }
+    //then handle other data
+    let formdata = req.body;
+    try {
+      await db.Staff.update(formdata, {
+        where: {
+          email: req.params.email,
+        },
+      });
+      res.status(200).json({ msg: "update successful" });
       logger.info(
-        `${system_user}| Tried editing staff with null  data staff record: ${req.params.email}`
+        `${system_user}| updated staff details for: ${req.params.email}`
       );
+    } catch (error) {
+      logger.error(
+        `${system_user}| Updating staff record encountered error: ${error}`
+      );
+      res.status(500).json({
+        msg: "encountered an error updating staff, try again or contact support",
+      });
     }
   } else {
     res.status(404).json({ msg: "staff not found" });
@@ -180,7 +175,7 @@ const deleteone = async (req, res) => {
         });
       }
     });
-    res.status(200).json({ msg: `User(s) deleted successfuly` });
+    res.status(200).json({ msg: `staff deleted successfuly` });
   } else {
     logger.info(
       `${system_user}| Tried deleting a non existent staff: ${req.params.email}`

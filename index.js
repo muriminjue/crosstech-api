@@ -38,15 +38,21 @@ app.use(
 app.use("/api", router);
 
 //seqeulize sync
-db.sequelize.sync({
-  force: true,
-});
+// db.sequelize.sync({
+//   force: 1,
+// });
 
 //run app
+global.system_user = "";
+
 
 (async () => {
+  try {
   await db.sequelize.authenticate();
   logger.info("db connected");
+  } catch(e){
+    logger.error(`Db connection failed due to ${e}`)
+  }
 })()
   .then(async () => {
     app.listen(Port, async () => {

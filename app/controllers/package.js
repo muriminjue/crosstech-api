@@ -1,8 +1,8 @@
 const db = require("../models");
+const logger = require("../config/logger");
 
 const getall = async (req, res) => {
   try {
-  } catch (e) {
     let package = await db.Package.findAll({
       include: {
         model: db.Product,
@@ -15,10 +15,14 @@ const getall = async (req, res) => {
       res.status(404).json({ msg: "No packages exist" });
       logger.info(`${system_user}| requested all packages but found none`);
     }
+  } catch (e) {
+    res.status(500).json({
+      msg: "Error occurred, try again or contact support",
+    });
+    logger.error(
+      `${system_user}| encountered error when getting  all packages  due to: ${e}`
+    );
   }
-  logger.error(
-    `${system_user}| encountered error when getting  all packages  due to: ${e}`
-  );
 };
 
 const addnew = async (req, res) => {
@@ -57,19 +61,16 @@ const getone = async (req, res) => {
       order: [["createdAt", "DESC"]],
       include: {
         model: db.Product,
-        through: {
-          attributes: [],
-        },
       },
     });
     if (package) {
       res.status(200).send(package);
       logger.info(
-        `${system_user}| requested product: ${package.name}<${package.id}>`
+        `${system_user}| requested package: ${package.name}<${package.id}>`
       );
     } else {
       res.status(404).json({ msg: "No Products exist" });
-      logger.info(`${system_user}| none existent product`);
+      logger.info(`${system_user}| none existent package`);
     }
   } catch (e) {
     res.status(500).json({
@@ -77,33 +78,33 @@ const getone = async (req, res) => {
     });
 
     logger.error(
-      `${system_user}| encountered error when getting  product  due to: ${e}`
+      `${system_user}| encountered error when getting  package  due to: ${e}`
     );
   }
 };
 
 const editone = async (req, res) => {
   let id = req.params.id,
-    product = await db.Product.findByPk(id);
-  // should only be able to edit name, description and measure
-  if (!product) {
-    res.status(404).json({ msg: "product not found" });
-    logger.info(`${system_user}| tried editing a missing product`);
+    package = await db.Package.findByPk(id);
+  // should only be able to edit quantity and price
+  if (!package) {
+    res.status(404).json({ msg: "package not found" });
+    logger.info(`${system_user}| tried editing a missing package`);
   } else {
     try {
-      await db.Product.update(req.body, {
+      await db.Package.update(req.body, {
         where: {
           id: id,
         },
       });
       res.status(200).json({ msg: "success" });
       logger.info(
-        `${system_user}| edited product: ${product.name}<${product.id}>`
+        `${system_user}| edited package: ${package.name}<${package.id}>`
       );
     } catch (e) {
       res.status(500).json({ msg: "encoutered an error updating" });
       logger.error(
-        `${system_user}| could not update product details due to: ${e}`
+        `${system_user}| could not update package details due to: ${e}`
       );
     }
   }
@@ -113,12 +114,13 @@ const getonedetailed = async (req, res) => {
   try {
     let package = await db.Package.findByPk(id, {
       order: [["createdAt", "DESC"]],
-      include: {
-        model: db.Product,
-        model: db.Otherstock,
-        model: db.Packaging,
-        model: db.Sale,
-      },
+      include: [
+        { model: db.Product },
+        { model: db.Otherstock },
+        { model: db.Packaging },
+        { model: db.Sale },
+        { model: db.Releasedstock },
+      ],
     });
     if (package) {
       res.status(200).send(package);
@@ -141,14 +143,14 @@ const getonedetailed = async (req, res) => {
 
 const getalldetailed = async (req, res) => {
   try {
-  } catch (e) {
     let package = await db.Package.findAll({
-      include: {
-        model: db.Product,
-        model: db.Otherstock,
-        model: db.Packaging,
-        model: db.Sale,
-      },
+      include: [
+        { model: db.Product },
+        { model: db.Otherstock },
+        { model: db.Packaging },
+        { model: db.Sale },
+        { model: db.Releasedstock },
+      ],
     });
     if (package.length != 0) {
       res.status(200).send(package);
@@ -157,13 +159,14 @@ const getalldetailed = async (req, res) => {
       res.status(404).json({ msg: "No packages exist" });
       logger.info(`${system_user}| requested all packages but found none`);
     }
+  } catch (e) {
+    res.status(500).json({
+      msg: "Error occurred, try again or contact support",
+    });
+    logger.error(
+      `${system_user}| encountered error when getting  all packages  due to: ${e}`
+    );
   }
-  res.status(500).json({
-    msg: "Error occurred, try again or contact support",
-  });
-  logger.error(
-    `${system_user}| encountered error when getting  all packages  due to: ${e}`
-  );
 };
 module.exports = {
   getall,

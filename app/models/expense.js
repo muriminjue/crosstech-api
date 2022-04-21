@@ -24,9 +24,7 @@ module.exports = (sequelize, DataTypes) => {
       this.belongsTo(User, {
         foreignKey: "userId",
       });
-      this.hasMany(User, {
-        foreignKey: "userId",
-      });
+      
     }
   }
   Expenses.init(
@@ -39,7 +37,6 @@ module.exports = (sequelize, DataTypes) => {
       },
       date: {
         type: DataTypes.DATE,
-        defaultValue: Date.now(),
         allowNull: false,
       },
       amount: {

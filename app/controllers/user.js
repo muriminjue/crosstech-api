@@ -1,6 +1,8 @@
 const db = require("../models");
 const logger = require("../config/logger");
-const sendemail = require("../services/emailsender");
+const sendemail = require("../services/emails/mailer");
+const fileupload = require("../services/fileupload");
+const sendSms = require("../services/sms");
 
 //modules
 const jwt = require("jsonwebtoken");
@@ -8,13 +10,14 @@ const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
 const otpGenerator = require("otp-generator");
 const generator = require("generate-password");
-const axios = require("axios");
+
+dotenv.config();
 
 const salt = 12;
-dotenv.config();
+const imageMimeTypes = ["image/jpeg", "image/png", "image/gif", "image/jpg"];
 const allroles = [
   "admin",
-  "systemaadmin",
+  "systemadmin",
   "product_man",
   "stock_man",
   "sales_man",
@@ -28,13 +31,13 @@ const getroles = async (req, res) => {
 
 const adduser = async (req, res) => {
   let username = req.body.username,
-    staff = await db.Staff.findOne({ where: { email: username } }),
+    staff = await db.Staff.findOne({ where: { email: req.body.username } }),
     roles = req.body.roles;
   password = generator.generate({
     length: 10,
     uppercase: false,
   });
-  if (!staff) {
+  if (staff) {
     try {
       if (!username) {
         res.status(400).json({ msg: "Please select select a user" });
@@ -49,28 +52,38 @@ const adduser = async (req, res) => {
             `${system_user}| tried to create existing user:  ${username}`
           );
         } else {
-          await db.User.create({
+          let newuser = await db.User.create({
             username: username,
             password: await bcrypt.hash(password, salt),
           });
           await db.Staff.update({ user: true }, { where: { email: username } });
-          roles.forEach(async (element) => {
-            await db.Userroles.create({
-              roles: element,
-              username: username,
-            });
+          await roles.forEach(async (element) => {
+            try {
+              await db.Userroles.create({
+                role: element,
+                username: username,
+              });
+              logger.info(
+                `${system_user}|assigned role: ${element} to user: ${username}`
+              );
+            } catch (e) {
+              logger.error(
+                `${system_user}| assign role ${element} to user: ${username}`
+              );
+            }
           });
-
-          //makes edits after finishing emailing service
-          let sentby = "",
-            sendto = username,
-            subject = "Login Details",
-            text = `A user account has been created for you on this email. Login using \r\n password:  ${password} \r\n consider changing the password ofter logging in`;
-          await sendemail(sentby, sendto, subject, text);
           res.status(200).json({
             msg: "User added succesfuly",
           });
           logger.info(`${system_user}| created new user: ${username}`);
+
+          let email = {
+            sendto: newuser.username,
+            subject: "Login Details",
+            template: "newuser",
+            context: { password: password, today: new Date().toDateString() },
+          };
+          await sendemail(email);
         }
       }
     } catch (e) {
@@ -145,7 +158,7 @@ const sendotp = async (req, res) => {
     include: { model: db.Staff },
   });
   if (user) {
-    let otp = await otpGenerator.generate(6, {
+    let otp = otpGenerator.generate(6, {
         lowerCaseAlphabets: false,
         upperCaseAlphabets: false,
         specialChars: false,
@@ -153,42 +166,25 @@ const sendotp = async (req, res) => {
       newotp = { username: user.username, phone: user.Staff.phone, otp: otp };
 
     if (req.body.usesms == true) {
-      let sms = await db.Sms.create({
-        email: newotp.username,
-        phone: newotp.phone,
-        message: `Your Otp is ${otp}. Do not share with anyone.`,
-      });
       try {
-        let config = {
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              Authorization: "Bearer " + process.env.SMSkey,
-            },
-          },
-          data = {
-            sender: "Crosstech",
-            message: `Your Otp is ${otp}. Do not share with anyone.`,
-            phone: newotp.phone,
-            correlator: sms.dataValues.id,
-            //endpoint: process.env.RESapi
-          };
-        await axios
-          .post(process.env.SMSapi, data, config)
-          .then(async function (response) {
-            logger.info(newotp.phone + " " + response.data[0].message);
-            res.status(200).json({
-              msg: "Otp sms sent succesfuly",
-            });
-          })
-          .catch(function (error) {
-            res.status(500).json({
-              msg: "Could not send otp via sms, try again or contact support",
-            });
-            logger.error("sms failed" + error);
-          });
+        let sms = await db.Sms.create({
+          email: newotp.username,
+          phone: newotp.phone,
+          message: `Your Otp is ${otp}. Do not share with anyone.`,
+        });
+        let data = {
+          message: sms.message,
+          phone: newotp.phone,
+          correlator: sms.id,
+        };
 
-        logger.info("OTP Sent via Sms to: " + req.body.username);
+        let messageSent = await sendSms(data);
+        if (!messageSent) {
+          req.status(500).json({ msg: "OTP text not sent" });
+        } else {
+          res.status(200).json({ msg: "otp sent via text" });
+          logger.info("OTP Sent via Sms to: " + req.body.username);
+        }
       } catch (e) {
         res.status(500).json({
           msg: "Error occurred, try again or contact support",
@@ -197,11 +193,14 @@ const sendotp = async (req, res) => {
       }
     } else {
       try {
-        let sentby = "",
-          sendto = user.username,
-          subject = "Crosstech Admin Password Reset",
-          text = `Your OTP is ${otp}. Do not share with anyone. \r\n otp is valid for 15 minutes \r\n if it was not requested by you please ignore and email support`;
-        await sendemail(sentby, sendto, subject, text);
+        let email = {
+          sendto: user.username,
+          subject: "Password Reset",
+          template: "otpsent",
+          context: { otp: otp, today: new Date().toDateString() },
+        };
+        await sendemail(email);
+
         res.status(200).json({
           msg: "Otp emailed succesfuly",
         });
@@ -223,21 +222,20 @@ const sendotp = async (req, res) => {
   }
 };
 
-const changepass = async (req, res) => {
+const otpchangepass = async (req, res) => {
   //must be the user
   let user = await db.Otp.findOne({ where: { otp: req.body.otp } }),
     username = req.params.username;
   if (user && user.username == username) {
     try {
       let password = await bcrypt.hash(req.body.password, salt);
-      console.log(req.body.password, password);
       await db.User.update(
         { password: password },
         { where: { username: username } }
       );
       await db.Otp.destroy({ where: { otp: req.body.otp } });
-      logger.info(`changed password for : ${username}`);
-      res.status(200).json({ msg: `${username}changed password` });
+      logger.info(`otp passworr change for : ${username}`);
+      res.status(200).json({ msg: `${username} changed password` });
     } catch (e) {
       res.status(500).json({
         msg: "Error occurred, try again or contact support",
@@ -269,7 +267,7 @@ const updatepass = async (req, res) => {
         let password = bcrypt.hashSync(req.body.newpassword, parseInt(salt));
         await db.User.update(
           { password: password },
-          { where: { email: req.params.username } }
+          { where: { username: req.params.username } }
         );
         res.status(200).json({ msg: "Password has been Updated" });
         logger.info(`${system_user}|Updated password`);
@@ -301,9 +299,9 @@ const deleteuser = async (req, res) => {
       });
       await db.Staff.update({ user: false }, { where: { email: username } });
       res.status(200).json({
-        msg: `${system_user}| deleted user: <${username}>  succesfully`,
+        msg: "user: " + username + " deleted",
       });
-      logger.info(username + "deleted");
+      logger.info("${system_user}| deleted user: <${username}>  succesfully");
     } catch (e) {
       res
         .status(500)
@@ -340,15 +338,105 @@ const checkauth = async (req, res, next) => {
   }
 };
 
-//const getallusers = {}
+const updateimage = async (req, res) => {
+  try {
+    let user = await db.User.findOne({
+      where: { username: req.params.username },
+    });
+    if (user && user.username == system_user) {
+      if (req.files != null) {
+        let file = req.files.image;
+        if (imageMimeTypes.includes(file.mimetype)) {
+          await fileupload(file);
+          await db.Staff.update(
+            { image: file.name },
+            {
+              where: {
+                email: req.params.username,
+              },
+            }
+          );
+          logger.info(`${system_user} succesfully updated user image`);
+          res.status(200).json({ msg: "Image updated" });
+        } else {
+          res.status(400).json({ msg: "Wrong file format" });
+          logger.info(
+            `${system_user}| Attempted to upload wrong user image format`
+          );
+        }
+      } else {
+        res.status(400).json({ msg: "Please add a file upload" });
+        logger.info(
+          `${system_user}| Attempted to change user image with emtpty field`
+        );
+      }
+    } else {
+      res.status(400).json({ msg: "Not your user account" });
+      logger.info(
+        `${system_user}| Attempted to change user image for another user ${req.params.username}`
+      );
+    }
+  } catch (e) {
+    res
+      .status(500)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(
+      `${system_user}| Could not updste their user image due to: ${e}`
+    );
+  }
+};
+
+const changeUseroles = async (req, res) => {
+  try {
+    let user = await db.User.findOne({
+        where: { username: req.params.username },
+      }),
+      roles = req.body.roles;
+    if (user) {
+      await db.Userroles.destroy({ where: { username: req.params.username } });
+      await roles.forEach(async (element) => {
+        try {
+          await db.Userroles.create({
+            role: element,
+            username: req.params.username,
+          });
+          logger.info(
+            `${system_user}|assigned role: ${element} to user: ${req.params.username}`
+          );
+        } catch (e) {
+          res
+            .status(500)
+            .json({ msg: "Error occurred, try again or contact support" });
+          logger.error(
+            `${system_user}| Could not update  user roles due to: ${e}`
+          );
+          return;
+        }
+      });
+      res.status(200).json({ msg: "User roles updated" });
+    } else {
+      res.status(404).json({ msg: "User does not exist" });
+      logger.info(
+        `${system_user}| tried to update user roles for missing user ${req.body.username}`
+      );
+    }
+  } catch (e) {
+    res
+      .status(500)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(`${system_user}| Could not update user roles due to: ${e}`);
+  }
+};
 
 module.exports = {
   adduser,
   login,
   checkauth,
   sendotp,
-  changepass,
+  otpchangepass,
   updatepass,
   deleteuser,
   getroles,
+  updateimage,
+  changeUseroles,
 };

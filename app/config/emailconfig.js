@@ -1,8 +1,10 @@
-//module 
+//module
 const dotenv = require("dotenv");
-const nodemailer = require("nodemailer")
+const nodemailer = require("nodemailer");
+const path = require("path");
+const hbs = require("nodemailer-express-handlebars");
 
-dotenv.config()
+dotenv.config();
 
 const transporter = nodemailer.createTransport({
   host: process.env.ehost,
@@ -17,5 +19,17 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false,
   },
 });
+
+const options = {
+  viewEngine: {
+    layoutsDir: path.resolve("app/services/emails/layouts"),
+    defaultLayout: "_main",
+    extname: ".hbs",
+  },
+  extName: ".hbs",
+  viewPath: path.resolve("app/services/emails/layouts"),
+};
+
+transporter.use("compile", hbs(options));
 
 module.exports = transporter;
