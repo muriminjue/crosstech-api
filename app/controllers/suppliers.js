@@ -10,8 +10,8 @@ const addone = async (req, res) => {
     let supplier = await db.Supplier.findOne({
       where: {
         [Op.or]: [
-          { contact: req.body.contact },
-          { email: req.body.email },
+          { contact: req.body.contact || "" },
+          { email: req.body.email || "" },
           { fullname: req.body.fullname },
         ],
       },
@@ -44,13 +44,13 @@ const editone = async (req, res) => {
   let supplier = await db.Supplier.findByPk(req.params.id);
   try {
     if (supplier) {
-      await db.Supplier.update(req.body);
+      await db.Supplier.update(req.body, { where: { id: req.params.id } });
       logger.info(
         `${system_user}| Updated supplier: ${supplier.id} ${supplier.fullname}`
       );
       res.status(200).json({ msg: "Supplier updated successfully" });
     } else {
-      res.satus(404).json({ msg: "supplier does not exist" });
+      res.status(404).json({ msg: "supplier does not exist" });
       logger.info(`${system_user}| attempted to edit a missing supplier`);
     }
   } catch (e) {
@@ -62,7 +62,7 @@ const editone = async (req, res) => {
 };
 
 const getall = async (req, res) => {
-  let suppliers = await db.supplier.findAll();
+  let suppliers = await db.Supplier.findAll();
   if (suppliers.length != 0) {
     try {
       res.status(200).send(suppliers);
@@ -80,14 +80,14 @@ const getall = async (req, res) => {
 };
 
 const getalldetailed = async (req, res) => {
-  let suppliers = await db.supplier.findAll({
+  let suppliers = await db.Supplier.findAll({
     order: [["createdAt", "DESC"]],
-    include: { model: db.Otherstocking, model: db.Stocking },
+    include: [{ model: db.Otherstocking }, { model: db.Stocking }],
   });
   if (suppliers.length != 0) {
     try {
       res.status(200).send(suppliers);
-      logger.info(`${system_user}| Requested all supplier's list`);
+      logger.info(`${system_user}| Requested all supplier's detail list`);
     } catch (e) {
       res.status(500).json({
         msg: "Error occurred, try again or contact support",
@@ -104,7 +104,7 @@ const deleteone = async (req, res) => {
   let supplier = await db.Supplier.findByPk(req.params.id);
   try {
     if (supplier) {
-      await db.Supplier.destroy();
+      await db.Supplier.destroy({ where: { id: req.params.id } });
       logger.info(
         `${system_user} | deleted supplier: ${supplier.fullname}  ${supplier.contact}`
       );
@@ -117,14 +117,14 @@ const deleteone = async (req, res) => {
     res.status(500).json({
       msg: "Error occurred, try again or contact support",
     });
-    logger.error(`${system_user}|Could not delete supplier due to:  ${e}`);
+    logger.error(`${system_user}| Could not delete supplier due to:  ${e}`);
   }
 };
 
 const getone = async (req, res) => {
   try {
     let supplier = await db.Supplier.findByPk(req.params.id, {
-      include: { model: db.Otherstocking, model: db.Stocking },
+      include: [{ model: db.Otherstocking }, { model: db.Stocking }],
     });
     if (supplier) {
       res.status(200).send(supplier);

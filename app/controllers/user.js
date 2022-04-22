@@ -110,7 +110,7 @@ const login = async (req, res) => {
     try {
       let admin = await db.User.findOne({
         where: { username: username },
-        include: { model: db.Staff, model: db.Userroles },
+        include: [{ model: db.Staff}, {model: db.Userroles }],
       });
       if (!admin) {
         res.status(400).json({ msg: "user does not exist" });
@@ -324,11 +324,13 @@ const checkauth = async (req, res, next) => {
   if (token == null) {
     res.status(401).json({ msg: "No Authorisation token" });
     logger.info("request without authorisation");
+    return;
   } else {
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
       if (err) {
         res.status(403).json({ msg: "Invalid Token, Access denied" });
         logger.info("Invalid Token, Access denied");
+        return;
       } else {
         global.system_userid = user.admin.id;
         global.system_user = user.admin.username;

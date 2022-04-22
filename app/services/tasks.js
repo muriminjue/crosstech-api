@@ -37,19 +37,6 @@ const routineTasks = async () => {
   }
 };
 
-//sms delivered
-const deliveryreport = async (req, res) => {
-  let sms = await db.Sms.findOne(req.body.correlator);
-  await db.Sms.update(
-    { sent: true },
-    {
-      where: {
-        id: sms.dataValues.id,
-      },
-    }
-  );
-  logger.info(`sms to ${sms.phone} delivered`);
-  res.status(200);
-};
 
-module.exports = { deliveryreport, routineTasks };
+
+module.exports = {  routineTasks };

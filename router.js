@@ -4,7 +4,8 @@ const router = express.Router();
 
 //files
 const controllers = require("./app/controllers");
-const { deliveryreport } = require("./app/services/tasks");
+const { deliveryreport } = require("./app/services/sms");
+const access = require("./app/services/userroles")
 const checkauth= controllers.user.checkauth
 
 //routes
@@ -47,6 +48,24 @@ router.get("/packagedetailed/:id", /*checkauth,*/ controllers.package.getonedeta
 router.put("/package/:id", /*checkauth,*/ controllers.package.editone);
 
 // -- Busines partners
+router.get("/bp/customers",/*checkauth,*/ controllers.customers.getall)
+router.post("/bp/customers",/*checkauth,*/ controllers.customers.addone)
+router.put("/bp/customers/:id",/*checkauth,*/ controllers.customers.editone)
+router.delete("/bp/customers/:id",/*checkauth,*/ controllers.customers.deleteone)
+router.get("/bp/customersdetailed",/*checkauth,*/ controllers.customers.getalldetailed)
+router.get("/bp/customers/:id",/*checkauth,*/ controllers.customers.getone)
+router.get("/bp/retailer/:id",/*checkauth,*/ controllers.retailers.getone)
+router.get("/bp/retailer",/*checkauth,*/ controllers.retailers.getall)
+router.post("/bp/retailer", /*checkauth,*/ controllers.retailers.addone)
+router.get("/bp/retailerdetailed", /*checkauth,*/ controllers.retailers.getalldetailed)
+router.put("/bp/retailer/:id", /*checkauth,*/ controllers.retailers.editone)
+router.delete("/bp/retailer/:id", /*checkauth,*/ controllers.retailers.deleteone)
+router.get("/bp/suppliers",/*checkauth,*/ controllers.suppliers.getall)
+router.post("/bp/suppliers",/*checkauth,*/ controllers.suppliers.addone)
+router.put("/bp/suppliers/:id",/*checkauth,*/ controllers.suppliers.editone)
+router.delete("/bp/suppliers/:id",/*checkauth,*/ controllers.suppliers.deleteone)
+router.get("/bp/suppliersdetailed",/*checkauth,*/ controllers.suppliers.getalldetailed)
+router.get("/bp/suppliers/:id",/*checkauth,*/ controllers.suppliers.getone)
 
 //-- stock --
 // purchaseprod,
@@ -73,12 +92,3 @@ router.put("/package/:id", /*checkauth,*/ controllers.package.editone);
 
 module.exports = router;
 
-/*
-useroless defined as 
-1. sysadmin
-2. accounts
-3. admin
-4. packaging
-5. stocking
-
-*/

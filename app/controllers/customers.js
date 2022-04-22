@@ -10,8 +10,8 @@ const addone = async (req, res) => {
     let customer = await db.Customer.findOne({
       where: {
         [Op.or]: [
-          { contact: req.body.contact },
-          { email: req.body.email },
+          { contact: req.body.contact || "" },
+          { email: req.body.email || "" },
           { fullname: req.body.fullname },
         ],
       },
@@ -44,7 +44,7 @@ const editone = async (req, res) => {
   let customer = await db.Customer.findByPk(req.params.id);
   try {
     if (customer) {
-      await db.Customer.update(req.body);
+      await db.Customer.update(req.body,{where: {id: req.params.id }});
       logger.info(
         `${system_user}| Updated customer: ${customer.fullname} ${customer.id}`
       );
@@ -82,7 +82,7 @@ const getall = async (req, res) => {
 const getalldetailed = async (req, res) => {
   let customers = await db.Customer.findAll({
     order: [["createdAt", "DESC"]],
-    include: { model: db.Sale, model: db.Purchase },
+    include: [{ model: db.Sale }, { model: db.Purchase }],
   });
   if (customers.length != 0) {
     try {
@@ -104,13 +104,13 @@ const deleteone = async (req, res) => {
   let customer = await db.Customer.findByPk(req.params.id);
   try {
     if (customer) {
-      await db.Customer.destroy();
+      await db.Customer.destroy({where: {id: req.params.id}});
       logger.info(
         `${system_user}| deleted customer: ${customer.fullname} ${customer.contact}`
       );
       res.status(200).json({ msg: "customer deleted successfully" });
     } else {
-      res.satus(404).json({ msg: "Customer does not exist" });
+      res.status(404).json({ msg: "Customer does not exist" });
       logger.info(`${system_user}| attempted to delete a missing customer`);
     }
   } catch (e) {
@@ -121,4 +121,33 @@ const deleteone = async (req, res) => {
   }
 };
 
-module.exports = { addone, getall, editone, deleteone, getalldetailed };
+const getone = async (req, res) => {
+  try {
+    let customer = await db.Customer.findByPk(req.params.id, {
+      include: [{ model: db.Sale }, { model: db.Purchase }],
+    });
+    if (customer) {
+      res.status(200).send(customer);
+      logger.info(
+        `${system_user}| requested and received customer ${req.params.id} details`
+      );
+    } else {
+      res.status(404).json({ msg: "Customer doe not exist" });
+      logger.info(`${system_user}| attempted to get a missing customer`);
+    }
+  } catch (e) {
+    res.status(500).json({
+      msg: "Error occurred, try again or contact support",
+    });
+    logger.error(`${system_user}| Could get one customer due to:  ${e}`);
+  }
+};
+
+module.exports = {
+  addone,
+  getall,
+  editone,
+  deleteone,
+  getalldetailed,
+  getone,
+};

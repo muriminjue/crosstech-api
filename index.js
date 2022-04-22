@@ -39,7 +39,7 @@ app.use("/api", router);
 
 //seqeulize sync
 // db.sequelize.sync({
-//   force: 1,
+//   force: 0,
 // });
 
 //run app

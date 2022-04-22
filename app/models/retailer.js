@@ -1,5 +1,6 @@
 "use strict";
 const { Model } = require("sequelize");
+const PROTECTED_ATTRIBUTES = ["password", "tocken"]
 module.exports = (sequelize, DataTypes) => {
   class Retailers extends Model {
     /**
@@ -44,11 +45,19 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      Contact: {
+      contact: {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      Location: {
+      location: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      company: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      pinNo: {
         type: DataTypes.STRING,
         allowNull: true,
       },
@@ -63,7 +72,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       sequelize,
-      tableName: "retalers",
+      tableName: "retailers",
       modelName: "Retailer",
     }
   );
