@@ -1,7 +1,7 @@
 const dotenv = require("dotenv");
 
 const db = require("../models");
-const fileupload = require("../services/fileupload");
+const imagefileupload = require("../services/fileupload").imagefileupload;
 const imageMimeTypes = ["image/jpeg", "image/png", "image/gif", "image/jpg"];
 const logger = require("../config/logger");
 
@@ -111,7 +111,7 @@ const editone = async (req, res) => {
     if (req.files != null) {
       let file = req.files.image;
       if (imageMimeTypes.includes(file.mimetype)) {
-        await fileupload(file);
+        await imagefileupload(file);
         await db.Staff.update(
           { image: file.name },
           {

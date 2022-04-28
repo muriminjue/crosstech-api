@@ -39,17 +39,17 @@ module.exports = (sequelize, DataTypes) => {
       quantity: {
         // denomination amount
         allowNull: false,
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
       },
       number: {
         // items count
-        allowNull: true,
+        allowNull: false,
         defaultValue: 0,
         type: DataTypes.INTEGER,
       },
       price: {
         allowNull: false,
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
       },
     },
     {

@@ -25,30 +25,11 @@ module.exports = (sequelize, DataTypes) => {
         primaryKey: true,
         allowNull: false,
       },
-      fullname: {
-        type: DataTypes.STRING,
+      amount: {
+        type: DataTypes.FLOAT,
         allowNull: false,
       },
-      email: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      contact: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      location: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      company: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      pinNo: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
+      
     },
     {
       sequelize,

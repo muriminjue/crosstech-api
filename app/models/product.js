@@ -46,7 +46,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       amount: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
         defaultValue: 0,
         allowNull: false,
       },
@@ -55,7 +55,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
       },
       total: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
         defaultValue: 0,
         allowNull: false,
       },

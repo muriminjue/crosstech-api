@@ -4,6 +4,7 @@ const logger = require("../config/logger");
 const getall = async (req, res) => {
   try {
     let package = await db.Package.findAll({
+      order: [["createdAt", "DESC"]],
       include: {
         model: db.Product,
       },
@@ -33,8 +34,8 @@ const addnew = async (req, res) => {
     if (!mypackage) {
       let package = await db.Package.create({
         productId: req.body.product,
-        quantity: parseInt(req.body.quantity),
-        price: parseInt(req.body.price),
+        quantity: parseFloat(req.body.quantity),
+        price: parseFloat(req.body.price),
       });
       res.status(200).json({ msg: "success" });
       logger.info(
@@ -113,7 +114,6 @@ const getonedetailed = async (req, res) => {
   let id = req.params.id;
   try {
     let package = await db.Package.findByPk(id, {
-      order: [["createdAt", "DESC"]],
       include: [
         { model: db.Product },
         { model: db.Otherstock },
@@ -144,6 +144,7 @@ const getonedetailed = async (req, res) => {
 const getalldetailed = async (req, res) => {
   try {
     let package = await db.Package.findAll({
+      order: [["createdAt", "DESC"]],
       include: [
         { model: db.Product },
         { model: db.Otherstock },

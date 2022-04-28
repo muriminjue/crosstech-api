@@ -1,60 +1,74 @@
+const { Op } = require("sequelize");
+
 const db = require("../models");
 const logger = require("../config/logger");
-const fileupload = require("../services/fileupload");
+const fileUpload = require("../services/fileupload");
 
 // stock product
 const purchaseprod = async (req, res) => {
   let productid = req.body.product,
     product = await db.Product.findByPk(productid),
-    supplier = db.Supplier.findByPk(req.body.supplierId);
+    supplier = await db.Supplier.findByPk(req.body.supplier);
   if (product && supplier) {
-    let amount = parseInt(req.body.quantity) + product.amount,
-      total = parseInt(req.body.quantity) + product.total,
+    let amount = parseFloat(req.body.quantity) + parseFloat(product.amount),
+      total = parseFloat(req.body.quantity) + parseFloat(product.total),
       newStocking = {
         quantity: req.body.quantity,
         description: req.body.description,
         cost: req.body.cost,
         invoiceNo: req.body.invoiceNo,
-        supplierId: req.body.supplierId,
-        productsId: productid,
+        supplierId: req.body.supplier,
+        productId: productid,
         userId: system_userid,
       };
     try {
-      let stocking = await db.Stocking.create(newStocking);
-      await db.Product.update(
-        { amount: amount, total: total },
-        {
-          where: {
-            id: productid,
-          },
-        }
-      );
-      if (req.files) {
-        let file = req.files.receipt;
-        await fileupload(file);
-        await db.Stocking.update(
-          {
-            receipt: file.name,
-          },
+      let isStocking = await db.Stocking.findOne({
+        where: { invoiceNo: newStocking.invoiceNo },
+      });
+      if (!isStocking) {
+        let stocking = await db.Stocking.create(newStocking);
+        await db.Product.update(
+          { amount: amount, total: total },
           {
             where: {
-              id: stocking.dataValues.id,
+              id: productid,
             },
           }
         );
-        await db.Expense.create({
-          amount: req.body.cost,
-          reciept: file.name,
-          receipNo: req.body.recieptNo,
-          paidto: supplier.fullname,
-          stockingId: stocking.dataValues.id,
-          productId: productid,
-        });
+        if (req.files) {
+          let file = req.files.receipt;
+          file.name = `stock-${stocking.invoiceNo}-${new Date().getDate()}-${
+            new Date().getMonth() + 1
+          }-${new Date().getFullYear()}${file.name.slice(
+            file.name.lastIndexOf(".")
+          )}`;
+          let newExpense = {
+            date: new Date(),
+            amount: req.body.cost,
+            receipt: file.name,
+            receiptNo: req.body.invoiceNo,
+            paidto: supplier.fullname,
+            stockingId: stocking.id,
+            productId: productid,
+            userId: system_userid,
+          };
+          let afterUpload = async () => {
+            await db.Stocking.update(
+              { receipt: file.name },
+              { where: { id: newExpense.stockingId } }
+            );
+            await db.Expense.create(newExpense);
+          };
+          await fileUpload.stockfileupload(file, afterUpload, newExpense);
+        }
+        res.status(200).json({ msg: "Stock Updated" });
+        logger.info(
+          `${system_user}| Purchased stock for <${product.id}> ${product.name}`
+        );
+      } else {
+        res.status(400).json({ msg: "record exists" });
+        logger.info(`${system_user}| Tried adding existing stocking event`);
       }
-      res.status(200).json({ msg: "Stock Updated" });
-      logger.info(
-        `${system_user}| Purchased stock for <${product.id}> ${product.name}`
-      );
     } catch (e) {
       res
         .status(500)
@@ -72,6 +86,10 @@ const purchaseprod = async (req, res) => {
 const updatestocking = async (req, res) => {
   let stocking = await db.Stocking.findByPk(req.params.id);
   if (stocking) {
+    let expense = await db.Expense.findOne({
+      where: { stockingId: stocking.id },
+    });
+    let product = await db.Product.findByPk(stocking.productId);
     try {
       await db.Stocking.update(req.body, {
         where: {
@@ -79,18 +97,36 @@ const updatestocking = async (req, res) => {
         },
       });
       if (req.body.quantity) {
-        let product = await db.Product.findByPk(stocking.productsId),
-          difference = parseInt(req.body.quantity) - stocking.quantity,
-          amount = product.amount + difference,
-          total = product.total + difference;
+        let difference =
+          parseFloat(req.body.quantity) - parseFloat(stocking.quantity);
+        let amount = parseFloat(product.amount) + difference,
+          total = parseFloat(product.total) + difference;
         await db.Product.update(
-          { amount: amount, total: total, cost: req.body.cost },
+          { amount: amount, total: total },
           {
             where: {
               id: product.id,
             },
           }
         );
+      }
+      if (expense && req.body.cost) {
+        await db.Stocking.update(
+          { adjusted: true },
+          {
+            where: {
+              id: stocking.id,
+            },
+          }
+        );
+        await db.Expense.update(
+          { receiptNo: req.body.invoiceNo },
+          { where: { id: expense.id } }
+        );
+        await db.Adjustment.create({
+          amount: req.body.cost - expense.amount,
+          expenseId: expense.id,
+        });
       }
       res.status(200).json({ msg: "Stock updated succesfully" });
       logger.info(
@@ -114,27 +150,53 @@ const uploadStockreceipt = async (req, res) => {
       product = await db.Product.findByPk(stocking.productId),
       supplier = await db.Supplier.findByPk(stocking.supplierId);
     if (req.files) {
-      if (stocking) {
-        let file = req.files.receipt;
-        await fileupload(file);
-        await db.Stocking.update(
-          { receipt: file.name },
-          { where: { id: req.params.id } }
-        );
-        await db.Expense.create({
-          date: stocking.createdAt,
-          amount: stocking.cost,
-          receipt: file.name,
-          receiptNo: req.body.recieptNo,
-          paidto: supplier.fullname,
-          stockingId: stocking.id,
-          productId: product.id,
-          userId: system_userid,
-        });
-        res.status(200).json({ msg: "Stock updated succesfully" });
-        logger.info(
-          `${system_user}| updated stock ${stocking.id} for <${product.id}> ${product.name}`
-        );
+      let file = req.files.receipt;
+      file.name = `stock-${stocking.invoiceNo}-${new Date().getDate()}-${
+        new Date().getMonth() + 1
+      }-${new Date().getFullYear()}${file.name.slice(
+        file.name.lastIndexOf(".")
+      )}`;
+
+      let newExpense = {
+        date: stocking.createdAt,
+        amount: stocking.cost,
+        receipt: file.name,
+        receiptNo: stocking.invoiceNo,
+        paidto: supplier.fullname,
+        stockingId: stocking.id,
+        productId: product.id,
+        userId: system_userid,
+        productname: product.name,
+      };
+      if (stocking && stocking.receipt == null) {
+        let afterUpload = async () => {
+          await db.Stocking.update(
+            { receipt: file.name },
+            { where: { id: newExpense.stockingId } }
+          );
+          await db.Expense.create(newExpense);
+          res.status(200).json({ msg: "Stock updated succesfully" });
+          logger.info(
+            `${system_user}| updated stock ${newExpense.stockingId} for <${product.id}> ${newExpense.productname}`
+          );
+        };
+        await fileUpload.stockfileupload(file, afterUpload, newExpense);
+      } else if (stocking && stocking.receipt != null) {
+        let afterUpload = async () => {
+          await db.Stocking.update(
+            { receipt: file.name },
+            { where: { id: newExpense.stockingId } }
+          );
+          await db.Expense.update(
+            { receipt: file.name },
+            { where: { stockingId: newExpense.stockingId } }
+          );
+          res.status(200).json({ msg: "Stock updated succesfully" });
+          logger.info(
+            `${system_user}| updated stock ${newExpense.stockingId} for <${newExpense.productId}> ${newExpense.productname}`
+          );
+        };
+        await fileUpload.stockfileupload(file, afterUpload, newExpense);
       } else {
         res.status(404).json({ msg: "Record does not exist" });
         logger.info(`${system_user}| tried adding receipt to missing stock`);
@@ -153,20 +215,35 @@ const uploadStockreceipt = async (req, res) => {
 
 //do not create endpoint yet
 const deletestocking = async (req, res) => {
-  let stocking = await db.Stocking.findByPk(req.params.id),
-    product = await db.Product.findByPk(stocking.productId);
+  let stocking = await db.Stocking.findByPk(req.params.id);
   if (stocking) {
+    let product = await db.Product.findByPk(stocking.productId);
+    let expense = await db.Expense.findOne({
+      where: { stockingId: stocking.id },
+    });
     try {
-      let amount = product.amount - stocking.quantity,
-        total = product.total - stocking.quantity;
+      let amount = parseFloat(product.amount) - parseFloat(stocking.quantity),
+        total = parseFloat(product.total) - parseFloat(stocking.quantity);
       await db.Stocking.update(
-        { adjusted: true },
+        {
+          adjusted: true,
+          description: "deleted",
+          cost: 0,
+          quantity: 0,
+          invoiceNo: "",
+        },
         { where: { id: req.params.id } }
       );
       await db.Product.update(
         { amount: amount, total: total },
         { where: { id: stocking.productId } }
       );
+      if (expense) {
+        await db.Adjustment.create({
+          amount: 0 - parseFloat(expense.amount),
+          expenseId: expense.id,
+        });
+      }
       res.status(200).json({ msg: "Stock deleted succesfully" });
       logger.info(`${system_user}| Deleted stocking ${stocking.invoiceNo}`);
     } catch (e) {
@@ -185,6 +262,7 @@ const getallstocking = async (req, res) => {
   try {
     let stockings = await db.Stocking.findAll({
       order: [["createdAt", "DESC"]],
+      include: [{ model: db.Supplier }, { model: db.product }],
     });
     if (stockings.length != 0) {
       res.status(200).send(stockings);
@@ -206,12 +284,14 @@ const getallstocking = async (req, res) => {
 const getonestocking = async (req, res) => {
   try {
     let stocking = await db.Stocking.findByPk(req.params.id, {
-      include: {
-        model: db.Supplier,
-        model: db.Product,
-        model: db.User,
-        model: db.Expense,
-      },
+      include: [
+        {
+          model: db.Supplier,
+        },
+        { model: db.Product },
+        { model: db.User, attributes: ["username"] },
+        { model: db.Expense },
+      ],
     });
     if (stocking) {
       res.status(200).send(stocking);
@@ -234,12 +314,12 @@ const getallstockingdetailed = async (req, res) => {
   try {
     let stockings = await db.Stocking.findAll({
       order: [["createdAt", "DESC"]],
-      include: {
-        model: db.Supplier,
-        model: db.Product,
-        model: db.User,
-        model: db.Expense,
-      },
+      include: [
+        { model: db.Supplier },
+        { model: db.Product },
+        { model: db.User, attributes: ["username"] },
+        { model: db.Expense },
+      ],
     });
     if (stockings.length != 0) {
       res.status(200).send(stockings);
@@ -261,32 +341,38 @@ const getallstockingdetailed = async (req, res) => {
 
 const packageproduct = async (req, res) => {
   try {
-    let productId = req.body.product,
-      packageId = req.body.package,
-      number = parseInt(req.body.number),
-      package = await db.Package.findByPk(packageId),
-      product = await db.Package.findByPk(productId),
-      // update packaging
-      newPackaging = {
-        packageId: productId,
-        productId: packageId,
-        userId: system_userid,
-        number: number,
-      };
+    let packageId = req.body.package,
+      number = parseInt(req.body.number);
+    let package = await db.Package.findByPk(packageId);
+    let product = await db.Product.findByPk(package.productId);
+    // update packaging
+    let newPackaging = {
+      packageId: packageId,
+      productId: product.id,
+      userId: system_userid,
+      number: number,
+    };
     if (package && product) {
-      let newtotal = package.number + number,
-        newAmount = product.amount - package.quantity * number;
-      await db.Packaging.create(newPackaging);
-      /// update package
-      await db.Package.update(
-        { amount: newtotal },
-        { where: { id: packageId } }
-      );
-      //update product
-      await db.Product.update(
-        { amount: newAmount },
-        { where: { id: productId } }
-      );
+      let newtotal = parseInt(package.number) + number,
+        newAmount =
+          parseFloat(product.amount) - parseFloat(package.quantity) * number;
+      if (product.amount >= parseFloat(package.quantity) * number) {
+        await db.Packaging.create(newPackaging);
+        /// update package
+        await db.Package.update(
+          { number: newtotal },
+          { where: { id: packageId } }
+        );
+        //update product
+        await db.Product.update(
+          { amount: newAmount },
+          { where: { id: product.id } }
+        );
+      } else {
+        res.status(400).json({
+          msg: "not enough product",
+        })`${system_user}| tried packing more product than is in store`;
+      }
       res.status(200).json({ msg: "Record created succesfuly" });
       logger.info(
         `${system_user}| updated packaging for <${package.id}> ${package.name}`
@@ -307,12 +393,14 @@ const packageproduct = async (req, res) => {
 
 const deletepackaging = async (req, res) => {
   try {
-    let packaging = await db.Packaging.findByPk(req.params.id),
-      package = await db.Package.findByPk(packaging.packageId),
-      product = await db.Package.findByPk(packaging.productId);
+    let packaging = await db.Packaging.findByPk(req.params.id);
+    let package = await db.Package.findByPk(packaging.packageId),
+      product = await db.Product.findByPk(packaging.productId);
     if (packaging) {
-      let newtotal = package.number - packaging.number,
-        newAmount = product.amount + packaging.number * package.quantity;
+      let newtotal = parseInt(package.number) - parseInt(packaging.number),
+        newAmount =
+          parseFloat(product.amount) +
+          parseInt(packaging.number) * parseFloat(package.quantity);
       await db.Package.update(
         { number: newtotal },
         { where: { id: packaging.packageId } }
@@ -321,7 +409,10 @@ const deletepackaging = async (req, res) => {
         { amount: newAmount },
         { where: { id: packaging.productId } }
       );
-      await db.Packaging.destroy({ where: { id: product.id } });
+      await db.Packaging.update(
+        { removed: true },
+        { where: { id: product.id } }
+      );
       res.status(200).json({ msg: "Packaging deleted succesfully" });
       logger.info(
         `${system_user}| Deleted a packaging for ${product.name} ${package.name}${product.measure}`
@@ -338,12 +429,16 @@ const deletepackaging = async (req, res) => {
   }
 };
 
-// const editpackaging
+// To edit packaging. Delete the parckaging and add the correct one
 
 const getonepackaging = async (req, res) => {
   try {
     let packaging = await db.Packaging.findByPk(req.params.id, {
-      include: { model: db.Package, model: db.Product, model: db.User },
+      include: [
+        { model: db.Package },
+        { model: db.Product },
+        { model: db.User, attributes: ["username"] },
+      ],
     });
     if (packaging) {
       res.status(200).send(packaging);
@@ -370,7 +465,11 @@ const getallpackaging = async (req, res) => {
   try {
     let packagings = await db.Packaging.findAll({
       order: [["createdAt", "DESC"]],
-      include: { model: db.Package, model: db.Product, model: db.User },
+      include: [
+        { model: db.Package },
+        { model: db.Product },
+        { model: db.User, attributes: ["username"] },
+      ],
     });
     if (packagings.length != 0) {
       res.status(200).send(packagings);
@@ -392,81 +491,74 @@ const getallpackaging = async (req, res) => {
 };
 
 // other stock
-const addotherstockitem = async (req, res) => {
-  try {
-    let package = await db.Package.findByPk(req.body.package),
-      total = parseInt(req.body.number) + package.total,
-      otherstock = await db.Otherstock.create({
-        name: req.body.name,
-        description: req.body.description,
-        units: req.body.units,
-        packageId: req.body.pacakage,
-      });
-    res.status(200).json({ msg: "success" });
-    logger.info(
-      `${system_user}| added a new Stock item: ${otherstock.dataValues.name}<${otherstock.dataValues.id}>`
-    );
-  } catch (e) {
-    res.status(500).json({
-      msg: "Error occurred, try again or contact support",
-    });
-    logger.error(
-      `${system_user}| encountered error when adding new stock item due to: ${e}`
-    );
-  }
-};
-
 const purchaseotherstock = async (req, res) => {
   let otherstockid = req.body.otherstock,
-    otherstock = await db.Otherstock.findByPk(otherstockid),
-    supplier = db.Supplier.findByPk(req.body.supplierId);
+    otherstock = await db.Otherstock.findByPk(req.body.otherstock),
+    supplier = await db.Supplier.findByPk(req.body.supplier);
   if (otherstock) {
     let newStocking = {
-      number: req.body.number,
+      amount: parseFloat(req.body.amount),
       description: req.body.description,
       cost: req.body.cost,
       invoiceNo: req.body.invoiceNo,
-      supplierId: req.body.supplierId,
+      supplierId: req.body.supplier,
       otherstockId: otherstockid,
       userId: system_userid,
     };
     try {
-      let otherstocking = await db.Otherstocking.create(newStocking),
-        number = parseInt(req.body.number) + otherstock.number;
-      await db.Otherstock.update(
-        { number: number },
-        {
-          where: {
-            id: otherstockid,
-          },
-        }
-      );
-      if (req.files) {
-        let file = req.files.receipt;
-        await fileupload(file);
-        await db.Otherstocking.update(
-          {
-            receipt: file.name,
-          },
+      let isStocking = await db.Otherstocking.findOne({
+        where: { invoiceNo: newStocking.invoiceNo },
+      });
+      if (!isStocking) {
+        let otherstocking = await db.Otherstocking.create(newStocking),
+          amount = parseFloat(req.body.amount) + parseFloat(otherstock.amount);
+        await db.Otherstock.update(
+          { amount: amount },
           {
             where: {
-              id: otherstocking.dataValues.id,
+              id: otherstockid,
             },
           }
         );
-        await db.Expense.create({
-          amount: req.body.cost,
-          reciept: file.name,
-          receiptNo: req.body.recieptNo,
-          paidto: supplier.fullname,
-          stockingId: otherstocking.dataValues.id,
-          otherstockId: otherstockid,
-        });
+        if (req.files) {
+          let file = req.files.receipt;
+          file.name = `stock-${
+            otherstocking.invoiceNo
+          }-${new Date().getDate()}-${
+            new Date().getMonth() + 1
+          }-${new Date().getFullYear()}${file.name.slice(
+            file.name.lastIndexOf(".")
+          )}`;
+
+          let newExpense = {
+            date: new Date(),
+            amount: req.body.cost,
+            receipt: file.name,
+            receiptNo: req.body.invoiceNo,
+            paidto: supplier.fullname,
+            otherstockId: otherstockid,
+            otherstockingId: otherstocking.id,
+            userId: system_userid,
+          };
+          let afterUpload = async () => {
+            await db.Otherstocking.update(
+              { receipt: file.name },
+              { where: { id: otherstocking.id } }
+            );
+            await db.Expense.create(newExpense);
+          };
+          await fileUpload.stockfileupload(file, afterUpload, newExpense);
+        }
+        res.status(200).json({ msg: "Stock item updated" });
+        logger.info(
+          `${system_user}| updated stock item for <${otherstock.id}> ${otherstock.name}`
+        );
+      } else {
+        res.status(400).json({ msg: "Record exists" });
+        logger.info(
+          `${system_user}| tried adding existing otherstocking record`
+        );
       }
-      res.status(200).json({ msg: "Stock item updated" });
-      logger.info(
-        `${system_user}| updated stock item for <${otherstock.id}> ${otherstock.name}`
-      );
     } catch (e) {
       res
         .status(500)
@@ -481,75 +573,63 @@ const purchaseotherstock = async (req, res) => {
   }
 };
 
-const updateotherstocking = async (req, res) => {
-  let otherstocking = await db.Otherstocking.findByPk(req.params.id);
-  if (otherstocking) {
-    try {
-      await db.Otherstocking.update(req.body, {
-        where: {
-          id: otherstocking.id,
-        },
-      });
-      if (req.body.number) {
-        let otherstock = await db.Package.findByPk(otherstocking.otherstockId),
-          difference = parseInt(req.body.number) - otherstocking.number,
-          number = package.number + difference;
-        await db.Otherstock.update(
-          { number: number },
-          {
-            where: {
-              id: otherstock.id,
-            },
-          }
-        );
-      }
-      res.status(200).json({ msg: "Stock item updated succesfully" });
-      logger.info(
-        `${system_user}| updated stock for <${product.id}> ${product.name}`
-      );
-    } catch (e) {
-      res
-        .status(500)
-        .json({ msg: "Error occurred, try again or contact support" });
-      logger.error(`${system_user}| Could not add new stock due to: ${e}`);
-    }
-  } else {
-    res.status(404).json({ msg: "Record does not exist" });
-    logger.info(`${system_user}| tried editing missing stock`);
-  }
-};
-
 const uploadOtherstockreceipt = async (req, res) => {
   try {
-    let otherstocking = await db.Otherstocking.findByPk(req.params.id),
-      otherstock = await db.Otherstock.findByPk(otherstock.packageId),
-      supplier = await db.Supplier.findByPk(stocking.supplierId);
+    let otherstocking = await db.Otherstocking.findByPk(req.params.id);
+    let otherstock = await db.Otherstock.findByPk(otherstocking.otherstockId),
+      supplier = await db.Supplier.findByPk(otherstocking.supplierId);
     if (req.files) {
-      if (otherstocking) {
-        let file = req.files;
-        await fileupload(file);
-        await db.Otherstocking.update(
-          { receipt: file.name },
-          { where: { id: req.params.id } }
-        );
-        await db.Expense.create({
-          date: otherstocking.createdAt,
-          amount: otherstocking.cost,
-          receipt: file.name,
-          receiptNo: req.body.recieptNo,
-          paidto: supplier.fullname,
-          stockingId: otherstocking.id,
-          otherstockId: otherstock.id,
-          userId: system_userid,
-        });
-        res.status(200).json({ msg: "Item stocking updated succesfully" });
-        logger.info(
-          `${system_user}| updated stock ${otherstocking.id} for <${otherstock.id}> ${otherstock.name}`
-        );
+      let file = req.files.receipt;
+      file.name = `stock-${otherstocking.invoiceNo}-${new Date().getDate()}-${
+        new Date().getMonth() + 1
+      }-${new Date().getFullYear()}${file.name.slice(
+        file.name.lastIndexOf(".")
+      )}`;
+
+      let newExpense = {
+        date: otherstocking.createdAt,
+        amount: otherstocking.cost,
+        receipt: file.name,
+        receiptNo: otherstocking.invoiceNo,
+        paidto: supplier.fullname,
+        otherstockingId: otherstocking.id,
+        otherstockId: otherstocking.otherstockId,
+        userId: system_userid,
+        otherstockname: otherstock.name,
+      };
+      if (otherstocking && otherstocking.receipt == null) {
+        let afterUpload = async () => {
+          await db.Otherstocking.update(
+            { receipt: file.name },
+            { where: { id: newExpense.otherstockingId } }
+          );
+          await db.Expense.create(newExpense);
+          res.status(200).json({ msg: "Stock updated succesfully" });
+          logger.info(
+            `${system_user}| updated other stock ${newExpense.otherstockingId} for <${otherstock.id}> ${newExpense.otherstockname}`
+          );
+        };
+        await fileUpload.stockfileupload(file, afterUpload, newExpense);
+      } else if (stocking && otherstocking.receipt != null) {
+        let afterUpload = async () => {
+          await db.Otherstocking.update(
+            { receipt: file.name },
+            { where: { id: newExpense.otherstockingId } }
+          );
+          await db.Expense.update(
+            { receipt: file.name },
+            { where: { otherstockingId: newExpense.otherstockingId } }
+          );
+          res.status(200).json({ msg: "Stock updated succesfully" });
+          logger.info(
+            `${system_user}| updated other stock  ${newExpense.otherstockingId} for <${otherstock.id}> ${newExpense.otherstockname}`
+          );
+        };
+        await fileUpload.stockfileupload(file, afterUpload, newExpense);
       } else {
         res.status(404).json({ msg: "Record does not exist" });
         logger.info(
-          `${system_user}| tried adding receipt to missing item stock`
+          `${system_user}| tried adding receipt to missing other stock item`
         );
       }
     } else {
@@ -566,19 +646,98 @@ const uploadOtherstockreceipt = async (req, res) => {
   }
 };
 
+const updateotherstocking = async (req, res) => {
+  let otherstocking = await db.Otherstocking.findByPk(req.params.id);
+  if (otherstocking) {
+    let expense = await db.Expense.findOne({
+      where: { otherstockingId: otherstocking.id },
+    });
+    let otherstock = await db.Otherstock.findByPk(otherstocking.otherstockId);
+    try {
+      await db.Otherstocking.update(req.body, {
+        where: {
+          id: otherstocking.id,
+        },
+      });
+      if (req.body.amount) {
+        let difference =
+          parseInt(req.body.amount) - parseInt(otherstocking.amount);
+        let amount = otherstock.number + difference;
+        await db.Otherstock.update(
+          { amount: amount },
+          {
+            where: {
+              id: otherstock.id,
+            },
+          }
+        );
+      }
+      if (expense && req.body.cost) {
+        await db.Otherstocking.update(
+          { adjusted: true },
+          {
+            where: {
+              id: otherstocking.id,
+            },
+          }
+        );
+        await db.Expense.update(
+          { receiptNo: req.body.invoiceNo },
+          { where: { id: expense.id } }
+        );
+        await db.Adjustment.create({
+          amount: req.body.cost - expense.amount,
+          expenseId: expense.id,
+        });
+      }
+
+      res.status(200).json({ msg: "Stock item updated succesfully" });
+      logger.info(
+        `${system_user}| updated stock for <${otherstock.id}> ${otherstock.name}`
+      );
+    } catch (e) {
+      res
+        .status(500)
+        .json({ msg: "Error occurred, try again or contact support" });
+      logger.error(`${system_user}| Could not add new stock due to: ${e}`);
+    }
+  } else {
+    res.status(404).json({ msg: "Record does not exist" });
+    logger.info(`${system_user}| tried editing missing stock`);
+  }
+};
+
 // do not create endpoint
 const deleteotherstocking = async (req, res) => {
-  let otherstocking = await db.Otherstocking.findByPk(req.params.id),
-    otherstock = await db.otherstocking.findByPk(otherstocking.otherstockId);
-  if (stocking) {
+  let otherstocking = await db.Otherstocking.findByPk(req.params.id);
+  if (otherstocking) {
+    let otherstock = await db.Otherstock.findByPk(otherstocking.otherstockId);
+    let expense = await db.Expense.findOne({
+      where: { otherstockingId: otherstocking.id },
+    });
     try {
-      let amount = otherstock.number - otherstocking.number;
-      total = product.total - stocking.quantity;
-      await db.Othertocking.destroy({ where: { id: req.params.id } });
+      let amount =
+        parseFloat(otherstock.amount) - parseFloat(otherstocking.amount);
+      await db.Otherstocking.update(
+        {
+          adjusted: true,
+          description: "deleted",
+          cost: 0,
+          quantity: 0,
+          invoiceNo: "",
+        },
+        { where: { id: req.params.id } }
+      );
       await db.Otherstock.update(
-        { amount: amount, total: total },
+        { amount: amount },
         { where: { id: otherstock.id } }
       );
+      if (expense) {
+        await db.Adjustment.create({
+          amount: 0 - parseFloat(expense.amount),
+          expenseId: expense.id,
+        });
+      }
       res.status(200).json({ msg: "Item stocking deleted succesfully" });
       logger.info(`${system_user}| Deleted stocking ${stocking.invoiceNo}`);
     } catch (e) {
@@ -600,17 +759,17 @@ const deleteotherstocking = async (req, res) => {
 const getoneotherstocking = async (req, res) => {
   try {
     let otherstocking = await db.Otherstocking.findByPk(req.params.id, {
-      include: {
-        model: db.Supplier,
-        model: db.Otherstock,
-        model: db.User,
-        model: db.Expense,
-      },
+      include: [
+        { model: db.Supplier },
+        { model: db.Otherstock },
+        { model: db.User, attributes: ["username"] },
+        { model: db.Expense },
+      ],
     });
     if (otherstocking) {
       res.status(200).send(otherstocking);
       logger.info(
-        `${system_user}| fetched item stocking ${otherstocking.id} for <${otherstocking.otherstock.id}> ${otherstocking.otherstock.name}`
+        `${system_user}| fetched item stocking ${otherstocking.id} for <${otherstocking.Otherstock.id}> ${otherstocking.Otherstock.name}`
       );
     } else {
       res.status(404).json({ msg: "Record does not exist" });
@@ -630,12 +789,12 @@ const getallotherstockingdetailed = async (req, res) => {
   try {
     let otherstockings = await db.Otherstocking.findAll({
       order: [["createdAt", "DESC"]],
-      include: {
-        model: db.Supplier,
-        model: db.Otherstock,
-        model: db.User,
-        model: db.Expense,
-      },
+      include: [
+        { model: db.Supplier },
+        { model: db.Otherstock },
+        { model: db.User, attributes: ["username"] },
+        { model: db.Expense },
+      ],
     });
     if (otherstockings.length != 0) {
       res.status(200).send(otherstockings);
@@ -656,61 +815,116 @@ const getallotherstockingdetailed = async (req, res) => {
   }
 };
 
+const getallotherstocking = async (req, res) => {
+  try {
+    let otherstockings = await db.Otherstocking.findAll({
+      order: [["createdAt", "DESC"]],
+      include: [{ model: db.Supplier }, { model: db.Otherstock }],
+    });
+    if (otherstockings.length != 0) {
+      res.status(200).send(otherstockings);
+      logger.info(`${system_user}| fetched all item stocking`);
+    } else {
+      res.status(404).json({ msg: "Records do not exist" });
+      logger.info(
+        `${system_user}| attempted to fetch all item stocking records and found none`
+      );
+    }
+  } catch (e) {
+    res
+      .status(500)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(
+      `${system_user}| Could not fetch all item stocking due to: ${e}`
+    );
+  }
+};
+
+/*const consumeotherstock = async (req,res)=>{
+try{
+  req.body.forEach(async (item)=>{
+    let otherstock = await db.Otherstock.findByPk(item.id)
+    if (otherstock){
+      db.Otherstock.update
+    }
+  })
+}
+} */
+
 // realeasing stock
 // assign stock
 const assignstock = async (req, res) => {
-  if (req.body.toretailer) {
-    try {
-      let retailer = await db.Retaler.findByPk(req.body.retailer);
-      if (retailer) {
-        let newassignment = {
-          name: req.body.name,
-          description: req.body.description,
-          quantity: req.body.description,
-          packageId: req.body.package,
-          retailerId: req.body.retailer,
-        };
-        await db.Realeasestock.create(newassignment);
-        logger.info(`${system_user}| assigned stock to ${retailer.id}`);
-        res.status(200).json({ msg: "assignement successful" });
-      } else {
-        res.status(404).json({ msg: "Retailer does not exist" });
-        logger.info(
-          `${system_user}| attempted to assign stock to missing retailer`
-        );
+  let allrealeased = await db.Releasedstock.findAll({
+      where: { quantity: { [Op.gte]: 0 } },
+    }),
+    package = await db.Package.findByPk(req.body.package);
+  let sumreleased = 0;
+  allrealeased.forEach((element) => {
+    return (sumreleased = sumreleased + element.quantity);
+  });
+  let remaining =
+    parseInt(package.number) - sumreleased - parseInt(req.body.quantity);
+  if (remaining >= 0) {
+    if (req.body.retailer) {
+      try {
+        let retailer = await db.Retailer.findByPk(req.body.retailer);
+        if (retailer) {
+          let newassignment = {
+            name: req.body.name,
+            description: req.body.description,
+            quantity: parseInt(req.body.quantity),
+            packageId: req.body.package,
+            retailerId: req.body.retailer,
+          };
+          await db.Releasedstock.create(newassignment);
+          logger.info(`${system_user}| assigned stock to ${retailer.id}`);
+          res.status(200).json({ msg: "assignement successful" });
+        } else {
+          res.status(404).json({ msg: "Retailer does not exist" });
+          logger.info(
+            `${system_user}| attempted to assign stock to missing retailer`
+          );
+        }
+      } catch (e) {
+        res
+          .status(500)
+          .json({ msg: "Error occurred, try again or contact support" });
+        logger.error(`${system_user}| Could not assign stock due to: ${e}`);
       }
-    } catch (e) {
-      res
-        .status(500)
-        .json({ msg: "Error occurred, try again or contact support" });
-      logger.error(`${system_user}| Could not assign stock due to: ${e}`);
+    } else {
+      try {
+        let user = await db.User.findOne({
+          where: { username: req.body.user },
+        });
+        if (user) {
+          let newassignment = {
+            name: req.body.name,
+            description: req.body.description,
+            quantity: parseInt(req.body.quantity),
+            packageId: req.body.package,
+            userId: user.id,
+          };
+          await db.Releasedstock.create(newassignment);
+          logger.info(`${system_user}| assigned stock to ${user.id}`);
+          res.status(200).json({ msg: "assignement successful" });
+        } else {
+          res.status(404).json({ msg: "User does not exist" });
+          logger.info(
+            `${system_user}| attempted to assign stock to missing user`
+          );
+        }
+      } catch (e) {
+        res
+          .status(500)
+          .json({ msg: "Error occurred, try again or contact support" });
+        logger.error(`${system_user}| Could not assign stock due to: ${e}`);
+      }
     }
   } else {
-    try {
-      let user = await db.User.findByPk(req.body.user);
-      if (user) {
-        let newassignment = {
-          name: req.body.name,
-          description: req.body.description,
-          quantity: req.body.description,
-          packageId: req.body.package,
-          userId: req.body.user,
-        };
-        await db.Realeasestock.create(newassignment);
-        logger.info(`${system_user}| assigned stock to ${user.id}`);
-        res.status(200).json({ msg: "assignement successful" });
-      } else {
-        res.status(404).json({ msg: "User does not exist" });
-        logger.info(
-          `${system_user}| attempted to assign stock to missing user`
-        );
-      }
-    } catch (e) {
-      res
-        .status(500)
-        .json({ msg: "Error occurred, try again or contact support" });
-      logger.error(`${system_user}| Could not assign stock due to: ${e}`);
-    }
+    res.status(400).json({ msg: "No stock to assign" });
+    logger.info(
+      `${system_user}| attempted to assign absent stock to missing user`
+    );
   }
 };
 // undo assign
@@ -718,17 +932,27 @@ const undoassignstock = async (req, res) => {
   try {
     let assigned = await db.Releasedstock.findByPk(req.params.id);
     if (assigned) {
-      await db.Releasedstock.update(
-        { quantity: req.body.quantity },
-        { where: { id: req.params.id } }
-      );
-      res.status(200).json({ msg: "assignement ammended successfully" });
-      logger.info(
-        `${system_user}| ammended a stock assignement to ${assigned.UserId}`
-      );
+      let quantity = parseInt(assigned.quantity) - parseInt(req.body.quantity);
+      if (quantity >= 0) {
+        await db.Releasedstock.update(
+          { quantity: quantity },
+          { where: { id: req.params.id } }
+        );
+        res.status(200).json({ msg: "assignment ammended successfully" });
+        logger.info(
+          `${system_user}| ammended a stock assignement to ${assigned.UserId}`
+        );
+      } else {
+        res.status(404).json({ msg: "Assignement does not exist" });
+        logger.info(`${system_user}| attempted to ammend missing assignment`);
+      }
     } else {
-      res.status(404).json({ msg: "Assignement does not exist" });
-      logger.info(`${system_user}| attempted to ammend missing assignment`);
+      res
+        .status(400)
+        .json({ msg: "You cant release more than" + assigned.quantity });
+      logger.info(
+        `${system_user}| attempted to assign absent stock to missing user`
+      );
     }
   } catch (e) {
     res
@@ -742,7 +966,37 @@ const undoassignstock = async (req, res) => {
 
 const getassignedstock = async (req, res) => {
   try {
-    let assigned = await db.Releasedstock.findAll();
+    let assigned = await db.Releasedstock.findAll({
+      order: [["createdAt", "DESC"]],
+      include: [
+        { model: db.Package },
+        { model: db.Retailer },
+        { model: db.User, attributes: ["username"] },
+      ],
+    });
+    if (assigned.length != 0) {
+      res.status(200).send(assigned);
+      logger.info(`${system_user}| fetched all assigned stock`);
+    } else {
+      res.status(404).json({ msg: "No records to show" });
+      logger.info(`${system_user}| found no record for assigned stock`);
+    }
+  } catch (e) {
+    res
+      .status(500)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(`${system_user}| Could not fetch all assigned due to: ${e}`);
+  }
+};
+
+const getuserassignedstock = async (req, res) => {
+  try {
+    let assigned = await db.Releasedstock.findAll({
+      where: {
+        [Op.or]: [{ UserId: req.params.id }, { retailerId: req.params.id }],
+      },
+      include: { model: db.Package },
+    });
     if (assigned.length != 0) {
       res.status(200).send(assigned);
       logger.info(`${system_user}| fetched all assigned stock`);
@@ -770,14 +1024,15 @@ module.exports = {
   deletepackaging,
   getallpackaging,
   getonepackaging,
-  addotherstockitem,
   purchaseotherstock,
   updateotherstocking,
   uploadOtherstockreceipt,
   deleteotherstocking,
   getoneotherstocking,
   getallotherstockingdetailed,
+  getallotherstocking,
   assignstock,
   undoassignstock,
   getassignedstock,
+  getuserassignedstock,
 };

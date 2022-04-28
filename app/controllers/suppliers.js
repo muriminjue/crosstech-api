@@ -62,7 +62,7 @@ const editone = async (req, res) => {
 };
 
 const getall = async (req, res) => {
-  let suppliers = await db.Supplier.findAll();
+  let suppliers = await db.Supplier.findAll({order: [["createdAt", "DESC"]]});
   if (suppliers.length != 0) {
     try {
       res.status(200).send(suppliers);

@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "supplierId",
       });
       this.belongsTo(Product, {
-        foreignKey: "productsId",
+        foreignKey: "productId",
       });
       this.belongsTo(User, {
         foreignKey: "userId",
@@ -38,7 +38,11 @@ module.exports = (sequelize, DataTypes) => {
       },
       quantity: {
         allowNull: false,
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
+      },
+      cost: {
+        allowNull: false,
+        type: DataTypes.FLOAT,
       },
       invoiceNo: {
         type: DataTypes.STRING,

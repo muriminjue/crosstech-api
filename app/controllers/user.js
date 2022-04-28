@@ -1,8 +1,8 @@
 const db = require("../models");
 const logger = require("../config/logger");
 const sendemail = require("../services/emails/mailer");
-const fileupload = require("../services/fileupload");
-const sendSms = require("../services/sms");
+const imagefileupload= require("../services/fileupload").imagefileupload;
+const messaging = require("../services/sms");
 
 //modules
 const jwt = require("jsonwebtoken");
@@ -110,7 +110,7 @@ const login = async (req, res) => {
     try {
       let admin = await db.User.findOne({
         where: { username: username },
-        include: [{ model: db.Staff}, {model: db.Userroles }],
+        include: [{ model: db.Staff }, { model: db.Userroles }],
       });
       if (!admin) {
         res.status(400).json({ msg: "user does not exist" });
@@ -159,32 +159,37 @@ const sendotp = async (req, res) => {
   });
   if (user) {
     let otp = otpGenerator.generate(6, {
-        lowerCaseAlphabets: false,
-        upperCaseAlphabets: false,
-        specialChars: false,
-      }),
-      newotp = { username: user.username, phone: user.Staff.phone, otp: otp };
+      lowerCaseAlphabets: false,
+      upperCaseAlphabets: false,
+      specialChars: false,
+    });
+   let newOtp = {
+      username: user.username,
+      phone: user.Staff.phone,
+      otp: otp,
+    };
 
     if (req.body.usesms == true) {
       try {
-        let sms = await db.Sms.create({
-          email: newotp.username,
-          phone: newotp.phone,
+        let newsms = await db.Sms.create({
+          email: newOtp.username,
+          phone: newOtp.phone,
           message: `Your Otp is ${otp}. Do not share with anyone.`,
         });
         let data = {
-          message: sms.message,
-          phone: newotp.phone,
-          correlator: sms.id,
+          message: newsms.message,
+          phone: newsms.phone,
+          correlator: newsms.id,
         };
-
-        let messageSent = await sendSms(data);
-        if (!messageSent) {
-          req.status(500).json({ msg: "OTP text not sent" });
-        } else {
+        let afterSend = [];
+        afterSend.notsent = () => {
+          res.status(500).json({ msg: "OTP text not sent" });
+        };
+        afterSend.hassent = () => {
           res.status(200).json({ msg: "otp sent via text" });
-          logger.info("OTP Sent via Sms to: " + req.body.username);
-        }
+          logger.info("OTP Sent via Sms to: " + data.phone);
+        };
+        await messaging.sendSms(data, afterSend);
       } catch (e) {
         res.status(500).json({
           msg: "Error occurred, try again or contact support",
@@ -213,7 +218,7 @@ const sendotp = async (req, res) => {
       }
     }
 
-    await db.Otp.create(newotp);
+    await db.Otp.create(newOtp);
   } else {
     res.status(404).json({
       msg: "username does not exist",
@@ -349,7 +354,7 @@ const updateimage = async (req, res) => {
       if (req.files != null) {
         let file = req.files.image;
         if (imageMimeTypes.includes(file.mimetype)) {
-          await fileupload(file);
+          await imagefileupload(file);
           await db.Staff.update(
             { image: file.name },
             {

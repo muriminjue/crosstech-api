@@ -42,9 +42,9 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         type: DataTypes.STRING,
       },
-      number: {
+      amount: {
         allowNull: true,
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
         defaultValue: 0,
       },
     },

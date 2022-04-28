@@ -86,10 +86,7 @@ const getone = async (req, res) => {
   let id = req.params.id;
   try {
     let product = await db.Product.findByPk(id, {
-      order: [["createdAt", "DESC"]],
-      include: [
-        { model: db.Package },
-      ],
+      include: [{ model: db.Package }],
     });
     if (product) {
       res.status(200).send(product);
@@ -142,7 +139,7 @@ const getonedetailed = async (req, res) => {
   }
 };
 
-const getalldetailed = async (req,res) => {
+const getalldetailed = async (req, res) => {
   try {
     const product = await db.Product.findAll({
       order: [["createdAt", "DESC"]],

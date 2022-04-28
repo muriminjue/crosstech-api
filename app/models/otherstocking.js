@@ -35,9 +35,9 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
-      number: {
+      amount: {
         allowNull: false,
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
       },
       description: {
         type: DataTypes.STRING,
@@ -50,6 +50,11 @@ module.exports = (sequelize, DataTypes) => {
       cost: {
         type: DataTypes.FLOAT,
         allowNull: true,
+      },
+      adjusted: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
       },
     },
     {
