@@ -93,7 +93,7 @@ const editone = async (req, res) => {
     logger.info(`${system_user}| tried editing a missing package`);
   } else {
     try {
-      await db.Package.update(req.body, {
+      await db.Package.update({...req.body, productId: req.body.product}, {
         where: {
           id: id,
         },

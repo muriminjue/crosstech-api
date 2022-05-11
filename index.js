@@ -2,6 +2,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const fileUpload = require("express-fileupload");
+const cors = require("cors")
 
 //files
 const logger = require("./app/config/logger");
@@ -17,6 +18,8 @@ const Port = process.env.PORT;
 
 //init app
 const app = express();
+//allow croos origin
+app.use(cors())
 
 //pass json
 app.use(

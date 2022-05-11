@@ -54,7 +54,7 @@ const getone = async (req, res) => {
       where: {
         email: req.params.email,
       },
-      include: { model: db.User },
+      include: { model: db.User, attributes: ["username"] },
     });
     if (staff) {
       res.send(staff).status(200);

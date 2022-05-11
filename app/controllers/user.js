@@ -1,7 +1,7 @@
 const db = require("../models");
 const logger = require("../config/logger");
 const sendemail = require("../services/emails/mailer");
-const imagefileupload= require("../services/fileupload").imagefileupload;
+const imagefileupload = require("../services/fileupload").imagefileupload;
 const messaging = require("../services/sms");
 
 //modules
@@ -133,7 +133,7 @@ const login = async (req, res) => {
                 res.status(200).json({
                   token: token,
                   msg: "login success",
-                  admin: admin,
+                  user: admin,
                 });
                 logger.info(`${username} loggged in. Session started`);
               }
@@ -163,7 +163,7 @@ const sendotp = async (req, res) => {
       upperCaseAlphabets: false,
       specialChars: false,
     });
-   let newOtp = {
+    let newOtp = {
       username: user.username,
       phone: user.Staff.phone,
       otp: otp,

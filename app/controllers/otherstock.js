@@ -25,6 +25,10 @@ const addnew = async (req, res) => {
 const getall = async (req, res) => {
   let otherstock = await db.Otherstock.findAll({
     order: [["createdAt", "DESC"]],
+    include: {
+      model: db.Package,
+      include: { model: db.Product, attributes: ["name", "measure"] },
+    },
   });
   try {
     if (otherstock.length > 0) {
@@ -47,7 +51,10 @@ const getall = async (req, res) => {
 const getone = async (req, res) => {
   let otherstock = await db.Otherstock.findByPk(req.params.id, {
     include: [
-      { model: db.Package },
+      {
+        model: db.Package,
+        include: { model: db.Product, attributes: ["name", "measure"] },
+      },
       { model: db.Otherstocking },
       { model: db.Expense },
     ],
@@ -77,7 +84,10 @@ const getalldetailed = async (req, res) => {
   let otherstock = await db.Otherstock.findAll({
     order: [["createdAt", "DESC"]],
     include: [
-      { model: db.Package },
+      {
+        model: db.Package,
+        include: { model: db.Product, attributes: ["name", "measure"] },
+      },
       { model: db.Otherstocking },
       { model: db.Expense },
     ],
@@ -132,10 +142,10 @@ const getallpackage = async (req, res) => {
 };
 
 const editone = async (req, res) => {
-  let otherstock = await db.otherstock.findByPk(req.params.id);
+  let otherstock = await db.Otherstock.findByPk(req.params.id);
   try {
     if (otherstock) {
-      await db.otherstock.update(req.body, { where: { id: req.params.id } });
+      await db.Otherstock.update({...req.body, packageId: req.body.package}, { where: { id: req.params.id } });
       res.status(200).json({ msg: "success" });
       logger.info(`${system_user}| updated other stcok item ${req.params.id}`);
     } else {
@@ -160,5 +170,5 @@ module.exports = {
   getall,
   getalldetailed,
   getone,
-  getallpackage
+  getallpackage,
 };
