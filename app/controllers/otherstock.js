@@ -90,6 +90,7 @@ const getalldetailed = async (req, res) => {
       },
       { model: db.Otherstocking },
       { model: db.Expense },
+      { model: db.Stockutil },
     ],
   });
   try {
@@ -145,7 +146,10 @@ const editone = async (req, res) => {
   let otherstock = await db.Otherstock.findByPk(req.params.id);
   try {
     if (otherstock) {
-      await db.Otherstock.update({...req.body, packageId: req.body.package}, { where: { id: req.params.id } });
+      await db.Otherstock.update(
+        { ...req.body, packageId: req.body.package },
+        { where: { id: req.params.id } }
+      );
       res.status(200).json({ msg: "success" });
       logger.info(`${system_user}| updated other stcok item ${req.params.id}`);
     } else {

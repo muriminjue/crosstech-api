@@ -27,6 +27,7 @@ module.exports = (sequelize, DataTypes) => {
       Releasedstock,
       Userroles,
       Expense,
+      Stockutil,
     }) {
       // define association here
       this.belongsTo(Staff, {
@@ -47,6 +48,9 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "userId",
       });
       this.hasMany(Otherstocking, {
+        foreignKey: "userId",
+      });
+      this.hasMany(Stockutil, {
         foreignKey: "userId",
       });
       this.hasMany(Releasedstock, {

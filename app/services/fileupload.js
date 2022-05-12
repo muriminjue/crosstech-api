@@ -8,7 +8,6 @@ const logger = require("../config/logger");
 dotenv.config();
 
 const stockfileupload = async (file, afterUpload, newExpense, req, res) => {
-
   let  config = {
       headers: {
         ...formData.getHeaders(),

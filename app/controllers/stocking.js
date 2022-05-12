@@ -91,11 +91,18 @@ const updatestocking = async (req, res) => {
     });
     let product = await db.Product.findByPk(stocking.productId);
     try {
-      await db.Stocking.update(req.body, {
-        where: {
-          id: stocking.id,
+      await db.Stocking.update(
+        {
+          ...req.body,
+          productId: req.body.product,
+          supplierId: req.body.supplier,
         },
-      });
+        {
+          where: {
+            id: stocking.id,
+          },
+        }
+      );
       if (req.body.quantity) {
         let difference =
           parseFloat(req.body.quantity) - parseFloat(stocking.quantity);
@@ -146,8 +153,8 @@ const updatestocking = async (req, res) => {
 
 const uploadStockreceipt = async (req, res) => {
   try {
-    let stocking = await db.Stocking.findByPk(req.params.id),
-      product = await db.Product.findByPk(stocking.productId),
+    let stocking = await db.Stocking.findByPk(req.params.id);
+    let product = await db.Product.findByPk(stocking.productId),
       supplier = await db.Supplier.findByPk(stocking.supplierId);
     if (req.files) {
       let file = req.files.receipt;
@@ -610,7 +617,7 @@ const uploadOtherstockreceipt = async (req, res) => {
           );
         };
         await fileUpload.stockfileupload(file, afterUpload, newExpense);
-      } else if (stocking && otherstocking.receipt != null) {
+      } else if (otherstocking && otherstocking.receipt != null) {
         let afterUpload = async () => {
           await db.Otherstocking.update(
             { receipt: file.name },
@@ -654,15 +661,23 @@ const updateotherstocking = async (req, res) => {
     });
     let otherstock = await db.Otherstock.findByPk(otherstocking.otherstockId);
     try {
-      await db.Otherstocking.update(req.body, {
-        where: {
-          id: otherstocking.id,
+      await db.Otherstocking.update(
+        {
+          ...req.body,
+          otherstockId: req.body.otherstock,
+          supplierId: req.body.supplier,
         },
-      });
+        {
+          where: {
+            id: otherstocking.id,
+          },
+        }
+      );
       if (req.body.amount) {
         let difference =
           parseInt(req.body.amount) - parseInt(otherstocking.amount);
-        let amount = otherstock.number + difference;
+        let amount = parseInt(otherstock.amount) + parseInt(difference);
+        console.log(amount);
         await db.Otherstock.update(
           { amount: amount },
           {
@@ -840,16 +855,47 @@ const getallotherstocking = async (req, res) => {
   }
 };
 
-/*const consumeotherstock = async (req,res)=>{
-try{
-  req.body.forEach(async (item)=>{
-    let otherstock = await db.Otherstock.findByPk(item.id)
-    if (otherstock){
-      db.Otherstock.update
+const consumeotherstock = async (req, res) => {
+  try {
+    let items  = req.body,
+      someError = false;
+      console.log(req.body, items)
+    await items.forEach(async (item) => {
+      let otherstock = await db.Otherstock.findByPk(item.otherstock);
+      if (otherstock && otherstock.amount >= parseInt(item.quantity)) {
+        let amount = parseInt(otherstock.amount) - parseInt(item.quantity);
+        db.Otherstock.update(
+          { amount: amount },
+          { where: { id: item.otherstock } }
+        );
+        db.Stockutil.create({
+          otherstockId: item.otherstock,
+          quantity: parseInt(item.quantity),
+          userId: system_userid,
+        });
+        logger.info(
+          `${system_user} spend stock ${otherstock.name} | ${otherstock.description} <${item.otherstock}>`
+        );
+      } else {
+        someError = true;
+      }
+    });
+    if (!someError) {
+      res.status(200).json({ msg: "Stock Updated Successfully" });
+    } else {
+      res
+        .status(400)
+        .json({ msg: "Some items could be updated for some reason" });
     }
-  })
-}
-} */
+  } catch (e) {
+    res
+      .status(500)
+      .json({ msg: "Error occurred, try again or contact support" });
+    logger.error(
+      `${system_user}| Could not consume other items in stock due to: ${e}`
+    );
+  }
+};
 
 // realeasing stock
 // assign stock
@@ -1035,4 +1081,5 @@ module.exports = {
   undoassignstock,
   getassignedstock,
   getuserassignedstock,
+  consumeotherstock,
 };
