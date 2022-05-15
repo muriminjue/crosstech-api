@@ -23,7 +23,6 @@ const routineTasks = async () => {
         try {
           await otps.forEach(async (otp) => {
             await db.Otp.destroy({ where: { id: otp.id } });
-           
           })
           logger.info(`Scheduled task| <delete stale OTP> deleted stale OTPs`);
         } catch (e) {
@@ -36,7 +35,6 @@ const routineTasks = async () => {
     logger.error(`Scheduled task| <delete stale OTP> Encountered error`);
   }
 };
-
 
 
 module.exports = {  routineTasks };

@@ -418,11 +418,11 @@ const deletepackaging = async (req, res) => {
       );
       await db.Packaging.update(
         { removed: true },
-        { where: { id: product.id } }
+        { where: { id: packaging.id } }
       );
       res.status(200).json({ msg: "Packaging deleted succesfully" });
       logger.info(
-        `${system_user}| Deleted a packaging for ${product.name} ${package.name}${product.measure}`
+        `${system_user}| Deleted a packaging for ${product.name} ${package.quantity}${product.measure}`
       );
     } else {
       res.status(404).json({ msg: "Selected packaging does not exist" });
@@ -859,7 +859,6 @@ const consumeotherstock = async (req, res) => {
   try {
     let items  = req.body,
       someError = false;
-      console.log(req.body, items)
     await items.forEach(async (item) => {
       let otherstock = await db.Otherstock.findByPk(item.otherstock);
       if (otherstock && otherstock.amount >= parseInt(item.quantity)) {

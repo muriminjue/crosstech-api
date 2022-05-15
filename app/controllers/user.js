@@ -394,11 +394,13 @@ const updateimage = async (req, res) => {
 };
 
 const changeUseroles = async (req, res) => {
+  console.log(req.body)
+
   try {
     let user = await db.User.findOne({
         where: { username: req.params.username },
       }),
-      roles = req.body.roles;
+      roles = req.body;
     if (user) {
       await db.Userroles.destroy({ where: { username: req.params.username } });
       await roles.forEach(async (element) => {
