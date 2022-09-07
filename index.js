@@ -41,9 +41,9 @@ app.use(
 app.use("/api", router);
 
 //seqeulize sync
-// db.sequelize.sync({
-//   force: 0,
-// });
+db.sequelize.sync({
+  force: 0,
+});
 
 //run app
 global.system_user = "";

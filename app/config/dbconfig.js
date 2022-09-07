@@ -13,6 +13,7 @@ const config = {
     password: process.env.DBpass1,
     database: process.env.DBname1,
     host: process.env.DBhost1,
+    port: 80,
     dialect: "mysql",
     logging: (msg) => logger.info(msg),
   },
